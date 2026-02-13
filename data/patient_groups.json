@@ -1,0 +1,90 @@
+[
+  {
+    "patient_group_id": "PG-001",
+    "decision_id": "D-2024-001",
+    "product_name": "OncoNex",
+    "decision_date": "2024-03-21",
+    "url": "https://www.g-ba.de/beschluesse/001",
+    "therapy_area": "Onkologie",
+    "awg_text": "Erwachsene mit metastasiertem NSCLC nach platinbasierter Vortherapie.",
+    "patient_group_text": "Patienten mit fortgeschrittenem nicht-kleinzelligem Lungenkarzinom, ECOG 0-1, nach Erstlinientherapie.",
+    "zvt_text": "Docetaxel oder Pemetrexed; patientenindividuelle Therapie nach ärztlicher Maßgabe"
+  },
+  {
+    "patient_group_id": "PG-002",
+    "decision_id": "D-2023-014",
+    "product_name": "LungoPlus",
+    "decision_date": "2023-10-05",
+    "url": "https://www.g-ba.de/beschluesse/014",
+    "therapy_area": "Onkologie",
+    "awg_text": "NSCLC mit EGFR-Wildtyp nach Progress unter Chemoimmuntherapie.",
+    "patient_group_text": "Vorbehandelte Patienten in 2L mit symptomatischer Tumorlast.",
+    "zvt_text": "Docetaxel in Kombination mit Nintedanib"
+  },
+  {
+    "patient_group_id": "PG-003",
+    "decision_id": "D-2022-052",
+    "product_name": "HemaCore",
+    "decision_date": "2022-01-13",
+    "url": "https://www.g-ba.de/beschluesse/052",
+    "therapy_area": "Onkologie",
+    "awg_text": "Rezidivierte akute myeloische Leukämie bei Erwachsenen.",
+    "patient_group_text": "Patienten mit rezidivierter AML nach mindestens einer Vortherapie, stationäre Behandlung häufig erforderlich.",
+    "zvt_text": "Best supportive care"
+  },
+  {
+    "patient_group_id": "PG-004",
+    "decision_id": "D-2021-082",
+    "product_name": "Immunava",
+    "decision_date": "2021-08-11",
+    "url": "https://www.g-ba.de/beschluesse/082",
+    "therapy_area": "Onkologie",
+    "awg_text": "Melanom in der adjuvanten Behandlung nach kompletter Resektion.",
+    "patient_group_text": "Patienten im kurativen Setting nach Operation, systemische adjuvante Therapie.",
+    "zvt_text": "Beobachtendes Abwarten"
+  },
+  {
+    "patient_group_id": "PG-005",
+    "decision_id": "D-2020-109",
+    "product_name": "Cardiovex",
+    "decision_date": "2020-11-25",
+    "url": "https://www.g-ba.de/beschluesse/109",
+    "therapy_area": "Herz-Kreislauf",
+    "awg_text": "Chronische Herzinsuffizienz NYHA II-III bei reduzierter Ejektionsfraktion.",
+    "patient_group_text": "Erwachsene mit stabiler symptomatischer HFrEF unter Standardtherapie.",
+    "zvt_text": "Optimierte Standardtherapie nach Maßgabe des Arztes"
+  },
+  {
+    "patient_group_id": "PG-006",
+    "decision_id": "D-2023-201",
+    "product_name": "PulmoAid",
+    "decision_date": "2023-06-01",
+    "url": "https://www.g-ba.de/beschluesse/201",
+    "therapy_area": "Atmung",
+    "awg_text": "Schweres eosinophiles Asthma bei Erwachsenen mit häufigen Exazerbationen.",
+    "patient_group_text": "Patienten trotz hochdosierter ICS/LABA und häufiger systemischer Kortikosteroidgabe.",
+    "zvt_text": "Best supportive care in Kombination mit optimierter inhalativer Therapie"
+  },
+  {
+    "patient_group_id": "PG-007",
+    "decision_id": "D-2024-077",
+    "product_name": "OncoLine",
+    "decision_date": "2024-07-19",
+    "url": "https://www.g-ba.de/beschluesse/077",
+    "therapy_area": "Onkologie",
+    "awg_text": "Metastasiertes kolorektales Karzinom nach mindestens zwei Vortherapien.",
+    "patient_group_text": "Vorbehandelte mCRC Patienten, ECOG 0-2, ambulantes Setting.",
+    "zvt_text": "Trifluridin/Tipiracil oder Regorafenib"
+  },
+  {
+    "patient_group_id": "PG-008",
+    "decision_id": "D-2019-010",
+    "product_name": "NeoOnco",
+    "decision_date": "2019-02-15",
+    "url": "https://www.g-ba.de/beschluesse/010",
+    "therapy_area": "Onkologie",
+    "awg_text": "Fortgeschrittenes Nierenzellkarzinom nach antiangiogener Vortherapie.",
+    "patient_group_text": "Erwachsene Patienten mit Progress nach Erstlinientherapie.",
+    "zvt_text": "Nivolumab oder Cabozantinib"
+  }
+]
