@@ -74,13 +74,60 @@ def export_pdf(run_id: str):
     request_payload = run["request_payload"]
 
     pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
+
+    page_w = max(60, pdf.w - pdf.l_margin - pdf.r_margin)
+
+    def wrap(txt: str) -> str:
+        txt = unescape(txt or "")
+        # bullets/sonderzeichen entschärfen + lange tokens umbrechbar machen
+        txt = txt.replace("\u2022", "-")
+        txt = txt.replace("/", "/\u200b").replace("-", "-\u200b")
+        return txt
+
     pdf.set_font("Helvetica", "B", 14)
-    pdf.multi_cell(0, 8, "AMNOG Comparator Shortlist (MVP)")
+    pdf.multi_cell(page_w, 8, wrap("AMNOG Comparator Shortlist (MVP)"))
+
     pdf.set_font("Helvetica", size=10)
-    pdf.multi_cell(0, 6, f"Therapiegebiet: {request_payload['therapy_area']}")
-    pdf.multi_cell(0, 6, f"Generiert: {response_payload['generated_at']}")
+    pdf.multi_cell(page_w, 6, wrap(f"Therapiegebiet: {request_payload.get('therapy_area', '')}"))
+    pdf.multi_cell(page_w, 6, wrap(f"Generiert: {response_payload.get('generated_at', '')}"))
     pdf.ln(2)
+
+    for candidate in response_payload.get("candidates", []):
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.multi_cell(page_w, 6, wrap(f"#{candidate.get('rank')} {candidate.get('candidate_text', '')}"))
+
+        pdf.set_font("Helvetica", size=9)
+        pdf.multi_cell(
+            page_w,
+            5,
+            wrap(
+                "Confidence: {c} | Support: {s} | Fälle: {n}".format(
+                    c=candidate.get("confidence", ""),
+                    s=candidate.get("support_score", ""),
+                    n=candidate.get("support_cases", ""),
+                )
+            ),
+        )
+
+        for ref in (candidate.get("references") or [])[:3]:
+            pdf.multi_cell(
+                page_w,
+                5,
+                wrap(f"- {ref.get('product_name','')} ({ref.get('decision_date','')}): {ref.get('url','')}"),
+            )
+        pdf.ln(1)
+
+    pdf.multi_cell(page_w, 5, wrap("Disclaimer: Plausible Kandidaten-Shortlist, keine verbindliche ZVT-Festlegung."))
+
+    out = BytesIO(pdf.output(dest="S").encode("latin-1", errors="replace"))
+    return StreamingResponse(
+        out,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=shortlist.pdf"},
+    )
+
 
     for candidate in response_payload["candidates"]:
         pdf.set_font("Helvetica", "B", 10)
