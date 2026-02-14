@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import datetime
 from html import unescape
 from io import BytesIO
@@ -90,16 +91,20 @@ def export_pdf(run_id: str):
         # Keep output latin-1 compatible for core FPDF fonts.
         return url.replace("/", "/\n").replace("-", "-\n")
 
+    def to_latin1_safe(s: str) -> str:
+        s = unescape(s or "")
+        # Normalize common typography variants before fallback replacement.
+        s = s.replace("\xa0", " ")
+        s = s.replace("–", "-").replace("—", "-")
+        s = s.replace("•", "-").replace("\u2022", "-")
+        s = s.replace("’", "'").replace("“", '"').replace("”", '"')
+        s = unicodedata.normalize("NFKC", s)
+        # Guarantee FPDF core-font compatibility.
+        return s.encode("latin-1", errors="replace").decode("latin-1")
+
     def wrap(txt: str) -> str:
-        txt = unescape(txt or "")
-
-        # latin-1 safe replacements (Core fonts)
-        txt = txt.replace("\xa0", " ")              # NBSP -> space
-        txt = txt.replace("–", "-").replace("—", "-")
-        txt = txt.replace("•", "-").replace("\u2022", "-")
-        txt = txt.replace("’", "'").replace("“", '"').replace("”", '"')
-
-        # Only force URL breaks to avoid unwanted line breaks in normal prose.
+        txt = to_latin1_safe(txt)
+        # URL soft breaks (latin-1 safe)
         return url_pattern.sub(lambda m: _soft_break_url(m.group(0)), txt)
 
     pdf.set_font("Helvetica", "B", 14)
