@@ -6,12 +6,15 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime
+from functools import lru_cache
 from pathlib import Path
 
 from app.models import CandidateResult, ReferenceItem, ShortlistRequest
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "patient_groups.json"
 WORD_RE = re.compile(r"[A-Za-zÄÖÜäöüß0-9]+")
+_PAREN_ABBR_RE = re.compile(r"\((?:\s*[A-Za-z]{2,6}\s*)\)")
+_WS_RE = re.compile(r"\s+")
 
 
 @dataclass
@@ -27,9 +30,10 @@ class PatientGroupRecord:
     zvt_text: str
 
 
-def load_records() -> list[PatientGroupRecord]:
+@lru_cache(maxsize=1)
+def load_records() -> tuple[PatientGroupRecord, ...]:
     rows = json.loads(DATA_PATH.read_text(encoding="utf-8"))
-    return [PatientGroupRecord(**row) for row in rows]
+    return tuple(PatientGroupRecord(**row) for row in rows)
 
 
 def tokenize(text: str) -> list[str]:
@@ -46,7 +50,10 @@ def overlap_score(query: str, document: str) -> float:
 
 
 def recency_weight(decision_date: str) -> float:
-    decision = datetime.strptime(decision_date, "%Y-%m-%d").date()
+    try:
+        decision = datetime.strptime(decision_date, "%Y-%m-%d").date()
+    except Exception:
+        return 0.8
     years = (date.today() - decision).days / 365.25
     if years < 2:
         return 1.0
@@ -56,9 +63,22 @@ def recency_weight(decision_date: str) -> float:
 
 
 def normalize_candidate(text: str) -> str:
-    cleaned = re.sub(r"\s+", " ", text.strip().lower())
+    cleaned = (text or "").strip().lower()
+    cleaned = _WS_RE.sub(" ", cleaned)
+
     cleaned = cleaned.replace("best supportive care", "bsc")
+    cleaned = cleaned.replace("best supportive-care", "bsc")
+    cleaned = re.sub(r"\bb\s*\.?\s*s\s*\.?\s*c\b", "bsc", cleaned)
+
     cleaned = cleaned.replace("beobachtendes abwarten", "watchful waiting")
+
+    cleaned = cleaned.replace("patientenindividuelle therapie", "pit")
+    cleaned = cleaned.replace("nach ärztlicher maßgabe", "nach arztlicher maßgabe")
+    cleaned = cleaned.replace("nach maßgabe des arztes", "nach arztlicher maßgabe")
+    cleaned = cleaned.replace("ärztlicher maßgabe", "arztlicher maßgabe")
+
+    cleaned = _PAREN_ABBR_RE.sub("", cleaned)
+    cleaned = _WS_RE.sub(" ", cleaned).strip(" ;,.")
     return cleaned
 
 
@@ -71,12 +91,12 @@ def confidence_label(score: float, support_cases: int) -> str:
 
 
 def ambiguity_label(sorted_scores: list[float]) -> str:
-    if len(sorted_scores) < 2:
+    if len(sorted_scores) < 2 or sorted_scores[0] <= 0:
         return "niedrig"
-    gap = sorted_scores[0] - sorted_scores[min(4, len(sorted_scores) - 1)]
-    if gap < 0.4:
+    ratio = sorted_scores[min(4, len(sorted_scores) - 1)] / sorted_scores[0]
+    if ratio > 0.75:
         return "hoch"
-    if gap < 1.0:
+    if ratio > 0.45:
         return "mittel"
     return "niedrig"
 
@@ -104,7 +124,9 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str]:
     retrieved.sort(key=lambda item: item[1], reverse=True)
     top_retrieved = retrieved[:30]
 
-    aggregated: dict[str, dict] = defaultdict(lambda: {"text": "", "score": 0.0, "refs": []})
+    aggregated: dict[str, dict] = defaultdict(
+        lambda: {"text": "", "score": 0.0, "refs": [], "best_by_decision": {}}
+    )
 
     for record, sim_score in top_retrieved:
         candidate_key = normalize_candidate(record.zvt_text)
@@ -122,7 +144,6 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str]:
         weighted = sim_score * recency_weight(record.decision_date) * adj
         entry = aggregated[candidate_key]
         entry["text"] = record.zvt_text
-        entry["score"] += weighted
         entry["refs"].append(
             ReferenceItem(
                 decision_id=record.decision_id,
@@ -133,12 +154,18 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str]:
                 score=round(weighted, 4),
             )
         )
+        prev = entry["best_by_decision"].get(record.decision_id)
+        if prev is None or weighted > prev:
+            entry["best_by_decision"][record.decision_id] = weighted
+
+    for entry in aggregated.values():
+        entry["score"] = sum(entry["best_by_decision"].values())
 
     ranked = sorted(aggregated.values(), key=lambda e: e["score"], reverse=True)[:5]
     candidates: list[CandidateResult] = []
     for idx, row in enumerate(ranked, start=1):
         refs = sorted(row["refs"], key=lambda r: r.score, reverse=True)[:5]
-        support_cases = len({ref.decision_id for ref in refs})
+        support_cases = len(row["best_by_decision"])
         score = round(row["score"], 4)
         candidates.append(
             CandidateResult(
