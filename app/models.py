@@ -6,6 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
+from app import domain as d
+
 
 class TherapyArea(str, Enum):
     AUGEN = "Augenerkrankungen"
@@ -64,6 +66,21 @@ class ShortlistRequest(BaseModel):
     comparator_text: Optional[str] = None
     project_name: Optional[str] = None
 
+    def to_domain(self) -> d.ShortlistRequest:
+        return d.ShortlistRequest(
+            therapy_area=d.TherapyArea(self.therapy_area.value),
+            indication_text=self.indication_text,
+            population_text=self.population_text,
+            setting=d.Setting(self.setting.value),
+            role=d.TherapyRole(self.role.value),
+            line=d.TherapyLine(self.line.value) if self.line else None,
+            comparator_type=d.ComparatorType(self.comparator_type.value)
+            if self.comparator_type
+            else None,
+            comparator_text=self.comparator_text,
+            project_name=self.project_name,
+        )
+
 
 class ReferenceItem(BaseModel):
     decision_id: str
@@ -72,6 +89,17 @@ class ReferenceItem(BaseModel):
     url: str
     snippet: str
     score: float
+
+    @staticmethod
+    def from_domain(x: d.ReferenceItem) -> "ReferenceItem":
+        return ReferenceItem(
+            decision_id=x.decision_id,
+            product_name=x.product_name,
+            decision_date=x.decision_date,
+            url=x.url,
+            snippet=x.snippet,
+            score=x.score,
+        )
 
 
 class CandidateResult(BaseModel):
@@ -82,12 +110,34 @@ class CandidateResult(BaseModel):
     support_cases: int
     references: list[ReferenceItem]
 
+    @staticmethod
+    def from_domain(x: d.CandidateResult) -> "CandidateResult":
+        return CandidateResult(
+            rank=x.rank,
+            candidate_text=x.candidate_text,
+            support_score=x.support_score,
+            confidence=x.confidence,
+            support_cases=x.support_cases,
+            references=[ReferenceItem.from_domain(r) for r in x.references],
+        )
+
 
 class ShortlistResponse(BaseModel):
     run_id: str
     candidates: list[CandidateResult]
     ambiguity: str
     generated_at: datetime
+
+    @staticmethod
+    def from_domain(
+        run_id: str, candidates: list[d.CandidateResult], ambiguity: str, generated_at: datetime
+    ) -> "ShortlistResponse":
+        return ShortlistResponse(
+            run_id=run_id,
+            candidates=[CandidateResult.from_domain(c) for c in candidates],
+            ambiguity=ambiguity,
+            generated_at=generated_at,
+        )
 
 
 class LeadRequest(BaseModel):

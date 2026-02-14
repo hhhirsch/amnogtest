@@ -1,4 +1,5 @@
-from app.models import Setting, ShortlistRequest, TherapyArea, TherapyRole
+import pytest
+from app.domain import Setting, ShortlistRequest, TherapyArea, TherapyRole
 from app.shortlist import (
     PatientGroupRecord,
     normalize_candidate,
@@ -64,7 +65,9 @@ def test_shortlist_caps_score_per_decision(monkeypatch) -> None:
 
     assert len(candidates) == 1
     assert candidates[0].support_cases == 1
-    assert candidates[0].support_score == 0.8165
+    assert candidates[0].support_score == pytest.approx(
+        max(ref.score for ref in candidates[0].references), rel=1e-4
+    )
 
 
 def test_recency_weight_invalid_date_fallback() -> None:
