@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from html import unescape
 from io import BytesIO
@@ -83,12 +84,17 @@ def export_pdf(run_id: str):
 
     page_w = max(60, pdf.w - pdf.l_margin - pdf.r_margin)
 
+    url_pattern = re.compile(r"https?://\S+")
+
+    def _soft_break_url(url: str) -> str:
+        # Keep output latin-1 compatible for core FPDF fonts.
+        return url.replace("/", "/\n").replace("-", "-\n")
+
     def wrap(txt: str) -> str:
-    txt = unescape(txt or "")
-    txt = txt.replace("\u2022", "-")
-    # statt Zero-Width-Space: echte Breaks, die Helvetica kann
-    txt = txt.replace("/", "/\n").replace("-", "-\n")
-    return txt
+        txt = unescape(txt or "")
+        txt = txt.replace("\u2022", "-")
+        # Only force URL breaks to avoid unwanted line breaks in normal prose.
+        return url_pattern.sub(lambda m: _soft_break_url(m.group(0)), txt)
 
     pdf.set_font("Helvetica", "B", 14)
     pdf.multi_cell(page_w, 8, wrap("AMNOG Comparator Shortlist (MVP)"))
