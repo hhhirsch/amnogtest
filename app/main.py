@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from html import unescape
 from io import BytesIO
 from uuid import uuid4
 
@@ -31,6 +32,7 @@ def startup() -> None:
 def create_shortlist(payload: ShortlistRequest) -> ShortlistResponse:
     domain_req = payload.to_domain()
     domain_candidates, ambiguity = shortlist(domain_req)
+
     run_id = str(uuid4())
     generated_at = datetime.utcnow()
 
@@ -42,6 +44,7 @@ def create_shortlist(payload: ShortlistRequest) -> ShortlistResponse:
         "ambiguity": ambiguity,
         "generated_at": generated_at.isoformat(),
     }
+
     save_run(run_id, payload.model_dump(), response_payload)
     return ShortlistResponse(**response_payload)
 
@@ -60,6 +63,7 @@ def create_lead(payload: LeadRequest) -> LeadResponse:
         raise HTTPException(status_code=400, detail="consent is required")
     if not get_run(payload.run_id):
         raise HTTPException(status_code=404, detail="run_id not found")
+
     lead_id, saved_at = save_lead(payload.run_id, payload.email, payload.company, payload.consent)
     return LeadResponse(lead_id=lead_id, saved_at=saved_at)
 
@@ -81,8 +85,8 @@ def export_pdf(run_id: str):
 
     def wrap(txt: str) -> str:
         txt = unescape(txt or "")
-        # bullets/sonderzeichen entschärfen + lange tokens umbrechbar machen
-        txt = txt.replace("\u2022", "-")
+        txt = txt.replace("\u2022", "-")  # bullet -> dash
+        # make long tokens (urls etc.) breakable
         txt = txt.replace("/", "/\u200b").replace("-", "-\u200b")
         return txt
 
@@ -96,7 +100,11 @@ def export_pdf(run_id: str):
 
     for candidate in response_payload.get("candidates", []):
         pdf.set_font("Helvetica", "B", 10)
-        pdf.multi_cell(page_w, 6, wrap(f"#{candidate.get('rank')} {candidate.get('candidate_text', '')}"))
+        pdf.multi_cell(
+            page_w,
+            6,
+            wrap(f"#{candidate.get('rank')} {candidate.get('candidate_text', '')}"),
+        )
 
         pdf.set_font("Helvetica", size=9)
         pdf.multi_cell(
@@ -115,11 +123,17 @@ def export_pdf(run_id: str):
             pdf.multi_cell(
                 page_w,
                 5,
-                wrap(f"- {ref.get('product_name','')} ({ref.get('decision_date','')}): {ref.get('url','')}"),
+                wrap(
+                    f"- {ref.get('product_name','')} ({ref.get('decision_date','')}): {ref.get('url','')}"
+                ),
             )
         pdf.ln(1)
 
-    pdf.multi_cell(page_w, 5, wrap("Disclaimer: Plausible Kandidaten-Shortlist, keine verbindliche ZVT-Festlegung."))
+    pdf.multi_cell(
+        page_w,
+        5,
+        wrap("Disclaimer: Plausible Kandidaten-Shortlist, keine verbindliche ZVT-Festlegung."),
+    )
 
     out = BytesIO(pdf.output(dest="S").encode("latin-1", errors="replace"))
     return StreamingResponse(
@@ -127,22 +141,3 @@ def export_pdf(run_id: str):
         media_type="application/pdf",
         headers={"Content-Disposition": "attachment; filename=shortlist.pdf"},
     )
-
-
-    for candidate in response_payload["candidates"]:
-        pdf.set_font("Helvetica", "B", 10)
-        pdf.multi_cell(0, 6, f"#{candidate['rank']} {candidate['candidate_text']}")
-        pdf.set_font("Helvetica", size=9)
-        pdf.multi_cell(
-            0,
-            5,
-            f"Confidence: {candidate['confidence']} | Support: {candidate['support_score']} | Fälle: {candidate['support_cases']}",
-        )
-        for ref in candidate["references"][:3]:
-            pdf.multi_cell(0, 5, f"- {ref['product_name']} ({ref['decision_date']}): {ref['url']}")
-        pdf.ln(1)
-
-    pdf.multi_cell(0, 5, "Disclaimer: Plausible Kandidaten-Shortlist, keine verbindliche ZVT-Festlegung.")
-    out = BytesIO(pdf.output(dest="S").encode("latin-1"))
-
-    return StreamingResponse(out, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=shortlist.pdf"})
