@@ -84,11 +84,11 @@ def export_pdf(run_id: str):
     page_w = max(60, pdf.w - pdf.l_margin - pdf.r_margin)
 
     def wrap(txt: str) -> str:
-        txt = unescape(txt or "")
-        txt = txt.replace("\u2022", "-")  # bullet -> dash
-        # make long tokens (urls etc.) breakable
-        txt = txt.replace("/", "/\u200b").replace("-", "-\u200b")
-        return txt
+    txt = unescape(txt or "")
+    txt = txt.replace("\u2022", "-")
+    # statt Zero-Width-Space: echte Breaks, die Helvetica kann
+    txt = txt.replace("/", "/\n").replace("-", "-\n")
+    return txt
 
     pdf.set_font("Helvetica", "B", 14)
     pdf.multi_cell(page_w, 8, wrap("AMNOG Comparator Shortlist (MVP)"))
