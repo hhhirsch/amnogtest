@@ -16,8 +16,19 @@ from io import BytesIO
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
-from fpdf import FPDF
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(title="AMNOG Comparator Shortlist MVP", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://amnogtest-546n.vercel.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 from app.models import (
     CandidateResult,
