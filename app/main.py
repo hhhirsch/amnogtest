@@ -8,7 +8,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fpdf import FPDF
 
-from app.models import LeadRequest, LeadResponse, RunResponse, ShortlistRequest, ShortlistResponse
+from app.models import (
+    CandidateResult,
+    LeadRequest,
+    LeadResponse,
+    RunResponse,
+    ShortlistRequest,
+    ShortlistResponse,
+)
 from app.shortlist import shortlist
 from app.store import get_run, init_db, save_lead, save_run
 
@@ -22,13 +29,18 @@ def startup() -> None:
 
 @app.post("/api/shortlist", response_model=ShortlistResponse)
 def create_shortlist(payload: ShortlistRequest) -> ShortlistResponse:
-    candidates, ambiguity = shortlist(payload)
+    domain_req = payload.to_domain()
+    domain_candidates, ambiguity = shortlist(domain_req)
     run_id = str(uuid4())
+    generated_at = datetime.utcnow()
+
+    # Convert Domain -> Pydantic response models
+    candidates = [CandidateResult.from_domain(c) for c in domain_candidates]
     response_payload = {
         "run_id": run_id,
         "candidates": [c.model_dump() for c in candidates],
         "ambiguity": ambiguity,
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": generated_at.isoformat(),
     }
     save_run(run_id, payload.model_dump(), response_payload)
     return ShortlistResponse(**response_payload)

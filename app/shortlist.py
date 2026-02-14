@@ -9,7 +9,7 @@ from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
 
-from app.models import CandidateResult, ReferenceItem, ShortlistRequest
+from app.domain import CandidateResult, ReferenceItem, ShortlistRequest
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "patient_groups.json"
 WORD_RE = re.compile(r"[A-Za-zÄÖÜäöüß0-9]+")
