@@ -88,21 +88,24 @@ def export_pdf(run_id: str):
     url_pattern = re.compile(r"https?://\S+")
 
     def _soft_break_url(url: str) -> str:
-        # Keep output latin-1 compatible for core FPDF fonts.
+        # latin-1 safe line breaks for long URLs
         return url.replace("/", "/\n").replace("-", "-\n")
 
     def safe_text(txt: str) -> str:
-        # 1) HTML entities -> chars
         txt = unescape(txt or "")
-        # 2) Normalize typography
+
+        # normalize common typography -> latin-1 friendly
         txt = txt.replace("\xa0", " ")
         txt = txt.replace("–", "-").replace("—", "-")
         txt = txt.replace("•", "-").replace("\u2022", "-")
         txt = txt.replace("’", "'").replace("“", '"').replace("”", '"')
+
         txt = unicodedata.normalize("NFKC", txt)
-        # 3) Only break long URLs (avoid mangling normal prose)
+
+        # only break URLs, not normal text
         txt = url_pattern.sub(lambda m: _soft_break_url(m.group(0)), txt)
-        # 4) Hard guarantee: core-font compatible
+
+        # hard guarantee core-font compatibility (Helvetica)
         return txt.encode("latin-1", errors="replace").decode("latin-1")
 
     pdf.set_font("Helvetica", "B", 14)
@@ -118,7 +121,7 @@ def export_pdf(run_id: str):
         pdf.multi_cell(
             page_w,
             6,
-            safe_text(f"#{candidate.get('rank')} {candidate.get('candidate_text', '')}"),
+            safe_text(f"#{candidate.get('rank', '')} {candidate.get('candidate_text', '')}"),
         )
 
         pdf.set_font("Helvetica", size=9)
@@ -138,19 +141,18 @@ def export_pdf(run_id: str):
             pdf.multi_cell(
                 page_w,
                 5,
-                safe_text(
-                    f"- {ref.get('product_name','')} ({ref.get('decision_date','')}): {ref.get('url','')}"
-                ),
+                safe_text(f"- {ref.get('product_name','')} ({ref.get('decision_date','')}): {ref.get('url','')}"),
             )
         pdf.ln(1)
 
-    pdf.multi_cell(
-        page_w,
-        5,
-        safe_text("Disclaimer: Plausible Kandidaten-Shortlist, keine verbindliche ZVT-Festlegung."),
-    )
+    pdf.multi_cell(page_w, 5, safe_text("Disclaimer: Plausible Kandidaten-Shortlist, keine verbindliche ZVT-Festlegung."))
 
-    out = BytesIO(pdf.output(dest="S").encode("latin-1", errors="replace"))
+    raw = pdf.output(dest="S")
+    if isinstance(raw, (bytes, bytearray)):
+        out = BytesIO(raw)
+    else:
+        out = BytesIO(str(raw).encode("latin-1", errors="replace"))
+
     return StreamingResponse(
         out,
         media_type="application/pdf",
