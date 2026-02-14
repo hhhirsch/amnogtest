@@ -26,7 +26,7 @@ jobs:
 
       - name: Install
         working-directory: amnog-frontend
-        run: npm ci
+        run: npm install
 
       - name: Build (static export)
         working-directory: amnog-frontend
