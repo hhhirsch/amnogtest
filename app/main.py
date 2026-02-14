@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from datetime import datetime
 from html import unescape
 from io import BytesIO
@@ -83,19 +85,32 @@ def export_pdf(run_id: str):
 
     page_w = max(60, pdf.w - pdf.l_margin - pdf.r_margin)
 
-    def wrap(txt: str) -> str:
-    txt = unescape(txt or "")
-    txt = txt.replace("\u2022", "-")
-    # statt Zero-Width-Space: echte Breaks, die Helvetica kann
-    txt = txt.replace("/", "/\n").replace("-", "-\n")
-    return txt
+    url_pattern = re.compile(r"https?://\S+")
+
+    def _soft_break_url(url: str) -> str:
+        # Keep output latin-1 compatible for core FPDF fonts.
+        return url.replace("/", "/\n").replace("-", "-\n")
+
+    def safe_text(txt: str) -> str:
+        # 1) HTML entities -> chars
+        txt = unescape(txt or "")
+        # 2) Normalize typography
+        txt = txt.replace("\xa0", " ")
+        txt = txt.replace("–", "-").replace("—", "-")
+        txt = txt.replace("•", "-").replace("\u2022", "-")
+        txt = txt.replace("’", "'").replace("“", '"').replace("”", '"')
+        txt = unicodedata.normalize("NFKC", txt)
+        # 3) Only break long URLs (avoid mangling normal prose)
+        txt = url_pattern.sub(lambda m: _soft_break_url(m.group(0)), txt)
+        # 4) Hard guarantee: core-font compatible
+        return txt.encode("latin-1", errors="replace").decode("latin-1")
 
     pdf.set_font("Helvetica", "B", 14)
-    pdf.multi_cell(page_w, 8, wrap("AMNOG Comparator Shortlist (MVP)"))
+    pdf.multi_cell(page_w, 8, safe_text("AMNOG Comparator Shortlist (MVP)"))
 
     pdf.set_font("Helvetica", size=10)
-    pdf.multi_cell(page_w, 6, wrap(f"Therapiegebiet: {request_payload.get('therapy_area', '')}"))
-    pdf.multi_cell(page_w, 6, wrap(f"Generiert: {response_payload.get('generated_at', '')}"))
+    pdf.multi_cell(page_w, 6, safe_text(f"Therapiegebiet: {request_payload.get('therapy_area', '')}"))
+    pdf.multi_cell(page_w, 6, safe_text(f"Generiert: {response_payload.get('generated_at', '')}"))
     pdf.ln(2)
 
     for candidate in response_payload.get("candidates", []):
@@ -103,14 +118,14 @@ def export_pdf(run_id: str):
         pdf.multi_cell(
             page_w,
             6,
-            wrap(f"#{candidate.get('rank')} {candidate.get('candidate_text', '')}"),
+            safe_text(f"#{candidate.get('rank')} {candidate.get('candidate_text', '')}"),
         )
 
         pdf.set_font("Helvetica", size=9)
         pdf.multi_cell(
             page_w,
             5,
-            wrap(
+            safe_text(
                 "Confidence: {c} | Support: {s} | Fälle: {n}".format(
                     c=candidate.get("confidence", ""),
                     s=candidate.get("support_score", ""),
@@ -123,7 +138,7 @@ def export_pdf(run_id: str):
             pdf.multi_cell(
                 page_w,
                 5,
-                wrap(
+                safe_text(
                     f"- {ref.get('product_name','')} ({ref.get('decision_date','')}): {ref.get('url','')}"
                 ),
             )
@@ -132,7 +147,7 @@ def export_pdf(run_id: str):
     pdf.multi_cell(
         page_w,
         5,
-        wrap("Disclaimer: Plausible Kandidaten-Shortlist, keine verbindliche ZVT-Festlegung."),
+        safe_text("Disclaimer: Plausible Kandidaten-Shortlist, keine verbindliche ZVT-Festlegung."),
     )
 
     out = BytesIO(pdf.output(dest="S").encode("latin-1", errors="replace"))
