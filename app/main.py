@@ -1,11 +1,3 @@
-@app.get("/")
-def root():
-    return {"ok": True, "service": "amnogtest", "docs": "/docs"}
-
-@app.get("/health")
-def health():
-    return {"ok": True}
-
 from __future__ import annotations
 
 import re
@@ -17,18 +9,8 @@ from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
-app = FastAPI(title="AMNOG Comparator Shortlist MVP", version="0.1.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://amnogtest-546n.vercel.app",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+from fastapi.responses import StreamingResponse
+from fpdf import FPDF
 
 from app.models import (
     CandidateResult,
@@ -43,11 +25,25 @@ from app.store import get_run, init_db, save_lead, save_run
 
 app = FastAPI(title="AMNOG Comparator Shortlist MVP", version="0.1.0")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://amnogtest-546n.vercel.app"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+def root():
+    return {"ok": True, "service": "amnogtest", "docs": "/docs"}
+
+@app.get("/health")
+def health():
+    return {"ok": True}
 
 @app.on_event("startup")
 def startup() -> None:
     init_db()
-
 
 @app.post("/api/shortlist", response_model=ShortlistResponse)
 def create_shortlist(payload: ShortlistRequest) -> ShortlistResponse:
