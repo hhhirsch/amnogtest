@@ -1,25 +1,10 @@
-"use client";
+import { Suspense } from "react";
+import RunClient from "./RunClient";
 
-import { useSearchParams } from "next/navigation";
-
-export default function RunPage() {
-  const sp = useSearchParams();
-  const runId = sp.get("runId");
-
-  if (!runId) {
-    return (
-      <div style={{ padding: 24 }}>
-        <h1>Run</h1>
-        <p>Missing <code>runId</code>.</p>
-        <p>Use: <code>/run?runId=123</code></p>
-      </div>
-    );
-  }
-
+export default function Page() {
   return (
-    <div style={{ padding: 24 }}>
-      <h1>Run {runId}</h1>
-      <p>(Hier dann deine Run-Details laden/rendern.)</p>
-    </div>
+    <Suspense fallback={<div style={{ padding: 24 }}>Loading…</div>}>
+      <RunClient />
+    </Suspense>
   );
 }
