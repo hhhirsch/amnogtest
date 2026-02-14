@@ -1,3 +1,11 @@
+@app.get("/")
+def root():
+    return {"ok": True, "service": "amnogtest", "docs": "/docs"}
+
+@app.get("/health")
+def health():
+    return {"ok": True}
+
 from __future__ import annotations
 
 import re
