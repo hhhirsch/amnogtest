@@ -92,7 +92,13 @@ def export_pdf(run_id: str):
 
     def wrap(txt: str) -> str:
         txt = unescape(txt or "")
-        txt = txt.replace("\u2022", "-")
+
+        # latin-1 safe replacements (Core fonts)
+        txt = txt.replace("\xa0", " ")              # NBSP -> space
+        txt = txt.replace("–", "-").replace("—", "-")
+        txt = txt.replace("•", "-").replace("\u2022", "-")
+        txt = txt.replace("’", "'").replace("“", '"').replace("”", '"')
+
         # Only force URL breaks to avoid unwanted line breaks in normal prose.
         return url_pattern.sub(lambda m: _soft_break_url(m.group(0)), txt)
 
