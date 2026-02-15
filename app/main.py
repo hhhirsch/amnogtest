@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import re
+import os
+import smtplib
 import unicodedata
+import logging
 from datetime import datetime
+from email.message import EmailMessage
 from html import unescape
 from io import BytesIO
 from uuid import uuid4
@@ -24,6 +28,14 @@ from app.shortlist import shortlist
 from app.store import get_run, init_db, save_lead, save_run
 
 app = FastAPI(title="AMNOG Comparator Shortlist MVP", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+LEAD_NOTIFY_TO = os.getenv("LEAD_NOTIFY_TO", "hirsch.hans92@gmail.com")
+SMTP_HOST = os.getenv("SMTP_HOST")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER")
+SMTP_PASS = os.getenv("SMTP_PASS")
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "noreply@amnogtest.local")
 
 PDF_SCORING_EXPLANATION_LINES = [
     "Support ist die Evidenzstärke aus ähnlichen, aktuellen und passenden G-BA-Beschlüssen.",
@@ -92,7 +104,49 @@ def create_lead(payload: LeadRequest) -> LeadResponse:
         raise HTTPException(status_code=404, detail="run_id not found")
 
     lead_id, saved_at = save_lead(payload.run_id, payload.email, payload.company, payload.consent)
+    try:
+        send_lead_notification(
+            run_id=payload.run_id,
+            email=str(payload.email),
+            company=payload.company,
+            lead_id=lead_id,
+            saved_at=saved_at,
+        )
+    except Exception:
+        logger.exception("Failed to send lead notification for lead_id=%s", lead_id)
     return LeadResponse(lead_id=lead_id, saved_at=saved_at)
+
+
+def send_lead_notification(
+    *, run_id: str, email: str, company: str | None, lead_id: int, saved_at: datetime
+) -> None:
+    if not SMTP_HOST:
+        logger.warning("Skipping lead notification mail because SMTP_HOST is not configured")
+        return
+
+    msg = EmailMessage()
+    msg["Subject"] = f"[AMNOG] New lead for run {run_id}"
+    msg["From"] = SMTP_FROM
+    msg["To"] = LEAD_NOTIFY_TO
+    msg.set_content(
+        "\n".join(
+            [
+                "Ein neuer Lead wurde gespeichert.",
+                f"lead_id: {lead_id}",
+                f"run_id: {run_id}",
+                f"email: {email}",
+                f"company: {company or '-'}",
+                f"saved_at: {saved_at.isoformat()}",
+            ]
+        )
+    )
+
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
+        smtp.ehlo()
+        if SMTP_USER and SMTP_PASS:
+            smtp.starttls()
+            smtp.login(SMTP_USER, SMTP_PASS)
+        smtp.send_message(msg)
 
 @app.get("/api/export/pdf")
 def export_pdf(run_id: str):

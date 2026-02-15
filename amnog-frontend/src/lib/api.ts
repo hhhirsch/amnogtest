@@ -1,7 +1,7 @@
 import type { RunResponse, ShortlistResponse } from "./types";
 import type { ShortlistRequestInput } from "./validators";
 
-const API_BASE =
+export const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE ?? "").replace(/\/+$/, "") ||
   "https://amnogtest.onrender.com";
 

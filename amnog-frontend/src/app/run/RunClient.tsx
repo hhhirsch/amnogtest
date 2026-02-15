@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { ResultsView } from "@/components/shortlist/ResultsView";
 import { ScoringExplanationCard } from "@/components/shortlist/ScoringExplanationCard";
 import { Card } from "@/components/ui/card";
@@ -9,20 +9,11 @@ import { getRun } from "@/lib/api";
 import type { RunResponse } from "@/lib/types";
 
 export default function RunClient() {
-  const sp = useSearchParams();
-  const pathname = usePathname();
+  const params = useParams<{ runId: string }>();
+  const runId = params?.runId;
   const [data, setData] = useState<RunResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const runId = useMemo(() => {
-    const fromQuery = sp.get("runId");
-    if (fromQuery) return fromQuery;
-
-    const parts = pathname.split("/").filter(Boolean);
-    const maybeId = parts[1];
-    return maybeId && maybeId !== "run" ? maybeId : null;
-  }, [pathname, sp]);
 
   useEffect(() => {
     if (!runId) {
@@ -61,9 +52,6 @@ export default function RunClient() {
       <Card className="space-y-2">
         <h1 className="text-xl font-semibold">Run</h1>
         <p>{error ?? "Run nicht gefunden."}</p>
-        <p>
-          Use: <code>/run?runId=123</code>
-        </p>
       </Card>
     );
   }
