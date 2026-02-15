@@ -104,6 +104,7 @@ def export_pdf(run_id: str):
         txt = txt.replace("•", "-").replace("\u2022", "-")
         txt = txt.replace("’", "'").replace("“", '"').replace("”", '"')
         txt = unicodedata.normalize("NFKC", txt)
+        # keep core-font safe (Helvetica)
         return txt.encode("latin-1", errors="replace").decode("latin-1")
 
     def safe_filename_component(s: str) -> str:
@@ -114,19 +115,44 @@ def export_pdf(run_id: str):
              .replace("ß", "ss")
         )
         s = safe_text(s)
-        s = s.replace(" ", "_")
-        s = re.sub(r"[^A-Za-z0-9_\-]+", "", s)
+        s = re.sub(r"\s+", "_", s)
+        s = re.sub(r"[^A-Za-z0-9._-]+", "", s)
         s = re.sub(r"_+", "_", s).strip("_")
         return s or "Export"
 
-    def soft_break_url_display(url: str) -> str:
-        # Nur fürs Anzeigen (nicht klickbar): weiche Umbrüche
-        return (url or "").replace("/", "/\n").replace("-", "-\n")
+    def url_display(url: str, max_len: int = 72) -> str:
+        """
+        Display-only (NOT clickable): remove scheme and insert line breaks only at "/"
+        so we don't destroy domains like "g-ba.de".
+        """
+        u = (url or "").strip()
+        if not u:
+            return ""
 
-    def write_mc(pdf: FPDF, w: float, h: float, text: str):
-        # robust: always start from left margin so width is really available
+        u = re.sub(r"^https?://", "", u)  # avoid the ugly "https:/ /" wrap
+        if len(u) <= max_len:
+            return u
+
+        out, line = [], ""
+        for ch in u:
+            line += ch
+            if ch == "/" and len(line) >= max_len:
+                out.append(line)
+                line = ""
+        if line:
+            # hard wrap remainder if still too long without slashes
+            while len(line) > max_len:
+                out.append(line[:max_len])
+                line = line[max_len:]
+            if line:
+                out.append(line)
+        return "\n".join(out)
+
+    def mc(h: float, text: str, *, font=("Helvetica", "", 10)):
+        """multi_cell with x-reset to avoid 'Not enough horizontal space'"""
         pdf.set_x(pdf.l_margin)
-        pdf.multi_cell(w, h, safe_text(text))
+        pdf.set_font(*font)
+        pdf.multi_cell(0, h, safe_text(text))
 
     # ---------- PDF setup ----------
     pdf = FPDF(format="A4", unit="mm")
@@ -134,99 +160,88 @@ def export_pdf(run_id: str):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    # always compute a stable usable width
-    effective_w = pdf.w - pdf.l_margin - pdf.r_margin
-    if effective_w <= 10:  # sanity
-        effective_w = 180
-
     filename = f"{safe_filename_component(therapy_area)}_zVT_Shortlist.pdf"
 
-    # ---------- Header / Title ----------
-    pdf.set_font("Helvetica", "B", 14)
-    title = f"{therapy_area} - {indication}".strip(" -") or "AMNOG Comparator Shortlist"
-    write_mc(pdf, effective_w, 8, title)
+    # ---------- Title ----------
+    title = f"{therapy_area} - {indication}".strip(" -")
+    mc(8, title or "AMNOG Comparator Shortlist", font=("Helvetica", "B", 14))
     pdf.ln(1)
 
     # ---------- Summary ----------
-    pdf.set_font("Helvetica", "B", 11)
-    write_mc(pdf, effective_w, 6, "Zusammenfassung der Eingaben")
+    mc(6, "Zusammenfassung der Eingaben", font=("Helvetica", "B", 11))
 
-    pdf.set_font("Helvetica", size=10)
     summary_lines = [
-        f"Therapiegebiet: {therapy_area}",
-        f"Anwendungsgebiet: {indication}",
-        f"Population (optional): {request_payload.get('population_text', '')}",
-        f"Setting: {request_payload.get('setting', '')}",
-        f"Rolle: {request_payload.get('role', '')}",
-        f"Therapielinie: {request_payload.get('line', '')}",
-        f"Comparator-Typ: {request_payload.get('comparator_type', '')}",
-        f"Comparator Text (optional): {request_payload.get('comparator_text', '')}",
-        f"Projektname: {request_payload.get('project_name', '')}",
-        f"Generiert: {response_payload.get('generated_at', '')}",
+        ("Therapiegebiet", therapy_area),
+        ("Anwendungsgebiet", indication),
+        ("Population (optional)", request_payload.get("population_text", "")),
+        ("Setting", request_payload.get("setting", "")),
+        ("Rolle", request_payload.get("role", "")),
+        ("Therapielinie", request_payload.get("line", "")),
+        ("Comparator-Typ", request_payload.get("comparator_type", "")),
+        ("Comparator Text (optional)", request_payload.get("comparator_text", "")),
+        ("Projektname", request_payload.get("project_name", "")),
+        ("Generiert", response_payload.get("generated_at", "")),
     ]
-    for line in summary_lines:
-        write_mc(pdf, effective_w, 5, line)
+    for k, v in summary_lines:
+        mc(5, f"{k}: {v or ''}", font=("Helvetica", "", 10))
 
     pdf.ln(2)
 
-    # ---------- Disclaimer ----------
-    pdf.set_font("Helvetica", "I", 9)
-    write_mc(
-        pdf,
-        effective_w,
+    # ---------- Disclaimer (italic) ----------
+    mc(
         5,
         "Die genannten Comparatoren sind lediglich eine Näherung und stellen keine Beratung dar "
         "und wurden auf Grundlage bestehender Beschlüsse ermittelt.",
+        font=("Helvetica", "I", 9),
     )
     pdf.ln(3)
 
     # ---------- Shortlist ----------
-    pdf.set_font("Helvetica", "B", 11)
-    write_mc(pdf, effective_w, 6, "Shortlist")
+    mc(6, "Shortlist", font=("Helvetica", "B", 11))
     pdf.ln(1)
 
     for candidate in (response_payload.get("candidates") or []):
-        pdf.set_font("Helvetica", "B", 10)
-        write_mc(
-            pdf,
-            effective_w,
+        # Candidate header
+        mc(
             6,
             f"#{candidate.get('rank', '')} {candidate.get('candidate_text', '')}",
+            font=("Helvetica", "B", 10),
         )
 
-        # score formatting (prevents long floats from looking “cut”)
-        s = candidate.get("support_score", "")
-        try:
-            s = f"{float(s):.3f}"
-        except Exception:
-            pass
-
-        pdf.set_font("Helvetica", size=9)
+        # Confidence line (avoid cut-off: multi_cell + x reset)
         conf_line = "Confidence: {c} | Support: {s} | Fälle: {n}".format(
             c=candidate.get("confidence", ""),
-            s=s,
+            s=candidate.get("support_score", ""),
             n=candidate.get("support_cases", ""),
         )
-        write_mc(pdf, effective_w, 5, conf_line)
+        mc(5, conf_line, font=("Helvetica", "", 9))
 
-        for ref in (candidate.get("references") or [])[:3]:
+        # References:
+        # 1) clickable label line via cell() (reliable)
+        # 2) URL below as small, non-clickable display (wrapped only at "/")
+        refs = (candidate.get("references") or [])[:3]
+        for ref in refs:
             product = ref.get("product_name", "") or ""
             date = ref.get("decision_date", "") or ""
             url = (ref.get("url", "") or "").strip()
 
-            # Line 1: clickable label (cell is more reliable than multi_cell for links)
-            pdf.set_font("Helvetica", size=9)
-            pdf.set_x(pdf.l_margin)
-            clickable_label = safe_text(f"- {product} ({date})")
-            if url.startswith("http://") or url.startswith("https://"):
-                pdf.cell(effective_w, 5, clickable_label, ln=1, link=url)
-            else:
-                pdf.cell(effective_w, 5, clickable_label, ln=1)
+            label = safe_text(f"- {product} ({date})")
 
-            # Line 2: URL display (small, NOT clickable)
+            pdf.set_x(pdf.l_margin)
+            pdf.set_font("Helvetica", "", 9)
+
+            if url.startswith("http://") or url.startswith("https://"):
+                pdf.set_text_color(0, 0, 255)  # blue for "looks like link"
+                pdf.cell(0, 5, label, ln=1, link=url)
+                pdf.set_text_color(0, 0, 0)
+            else:
+                pdf.cell(0, 5, label, ln=1)
+
             if url:
-                pdf.set_font("Helvetica", size=7)
-                write_mc(pdf, effective_w, 4, soft_break_url_display(url))
+                pdf.set_x(pdf.l_margin)
+                pdf.set_font("Helvetica", "", 7)
+                pdf.multi_cell(0, 4, safe_text(url_display(url)))
+            pdf.ln(0.5)
 
         pdf.ln(1)
 
