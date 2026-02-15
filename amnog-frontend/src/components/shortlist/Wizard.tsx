@@ -30,9 +30,21 @@ export function Wizard() {
 
   const steps = useMemo(
     () => [
-      <StepTherapyArea key="therapy" values={values} onChange={(patch) => setValues((prev) => ({ ...prev, ...patch }))} />,
-      <StepIndication key="indication" values={values} onChange={(patch) => setValues((prev) => ({ ...prev, ...patch }))} />,
-      <StepContext key="context" values={values} onChange={(patch) => setValues((prev) => ({ ...prev, ...patch }))} />,
+      <StepTherapyArea
+        key="therapy"
+        values={values}
+        onChange={(patch) => setValues((prev) => ({ ...prev, ...patch }))}
+      />,
+      <StepIndication
+        key="indication"
+        values={values}
+        onChange={(patch) => setValues((prev) => ({ ...prev, ...patch }))}
+      />,
+      <StepContext
+        key="context"
+        values={values}
+        onChange={(patch) => setValues((prev) => ({ ...prev, ...patch }))}
+      />,
     ],
     [values]
   );
@@ -66,31 +78,33 @@ export function Wizard() {
     }
   };
 
-<div className="flex justify-between gap-2">
-  <Button
-    type="button"
-    variant="outline"
-    onClick={() => setStep((prev) => Math.max(prev - 1, 0))}
-    disabled={step === 0 || busy}
-  >
-    Zurück
-  </Button>
+  return (
+    <Card className="space-y-4">
+      <h1 className="text-2xl font-bold">AMNOG Comparator Wizard</h1>
+      <p className="text-sm text-slate-600">Schritt {step + 1} von 3</p>
 
-  {step < steps.length - 1 ? (
-    <Button
-      type="button"
-      onClick={onNext}
-      disabled={busy}
-    >
-      Weiter
-    </Button>
-  ) : (
-    <Button
-      type="button"
-      onClick={onSubmit}
-      disabled={busy}
-    >
-      {busy ? "Berechne..." : "Shortlist erstellen"}
-    </Button>
-  )}
-</div>
+      {steps[step]}
+
+      <div className="flex justify-between gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setStep((prev) => Math.max(prev - 1, 0))}
+          disabled={step === 0 || busy}
+        >
+          Zurück
+        </Button>
+
+        {step < steps.length - 1 ? (
+          <Button type="button" onClick={onNext} disabled={busy}>
+            Weiter
+          </Button>
+        ) : (
+          <Button type="button" onClick={onSubmit} disabled={busy}>
+            {busy ? "Berechne..." : "Shortlist erstellen"}
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
