@@ -4,7 +4,23 @@ const config: Config = {
   darkMode: ["class"],
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        gold: {
+          DEFAULT: "#C9A227",
+          50: "#FDF8E8",
+          100: "#FAF0D1",
+          200: "#F5E1A3",
+          300: "#F0D275",
+          400: "#EBC347",
+          500: "#C9A227",
+          600: "#A1821F",
+          700: "#796217",
+          800: "#514110",
+          900: "#292108",
+        },
+      },
+    },
   },
   plugins: [],
 };

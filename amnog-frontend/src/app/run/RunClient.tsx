@@ -54,14 +54,14 @@ export default function RunClient() {
   }, [router, runId]);
 
   if (loading) {
-    return <div className="p-6">Lade Run...</div>;
+    return <div className="p-6 text-slate-400">Lade Run...</div>;
   }
 
   if (error || !data) {
     return (
       <Card className="space-y-2">
-        <h1 className="text-xl font-semibold">Run</h1>
-        <p>{error ?? "Run nicht gefunden."}</p>
+        <h1 className="text-xl font-semibold text-white">Run</h1>
+        <p className="text-slate-400">{error ?? "Run nicht gefunden."}</p>
       </Card>
     );
   }
@@ -70,8 +70,8 @@ export default function RunClient() {
     <div className="space-y-6">
       <ResultsView data={data.response_payload} />
 
-      <details className="rounded-lg border border-slate-200 bg-white p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-900">
+      <details className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-white">
           Wie die Shortlist entsteht (MVP)
         </summary>
         <div className="mt-3">
