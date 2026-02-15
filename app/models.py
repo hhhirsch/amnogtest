@@ -57,7 +57,7 @@ class ComparatorType(str, Enum):
 
 class ShortlistRequest(BaseModel):
     therapy_area: TherapyArea
-    indication_text: str = Field(min_length=50, max_length=6000)
+    indication_text: str = Field(max_length=6000)
     population_text: Optional[str] = None
     setting: Setting
     role: TherapyRole
