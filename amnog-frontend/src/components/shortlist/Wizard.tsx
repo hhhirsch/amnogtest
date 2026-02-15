@@ -10,6 +10,7 @@ import { ShortlistRequestSchema, type ShortlistRequestInput } from "@/lib/valida
 import { StepContext } from "./StepContext";
 import { StepIndication } from "./StepIndication";
 import { StepTherapyArea } from "./StepTherapyArea";
+import { ChevronRight } from "lucide-react";
 
 const STORAGE_KEY = "amnog-shortlist-draft";
 
@@ -79,31 +80,63 @@ export function Wizard() {
   };
 
   return (
-    <Card className="space-y-4">
-      <h2 className="text-2xl font-bold">Eingaben für Ihre Comparator-Shortlist</h2>
-      <p className="text-sm text-slate-600">Schritt {step + 1} von 3</p>
+    <Card goldBorder className="space-y-6">
+      {/* Step Indicator */}
+      <div className="flex items-center justify-center gap-2">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex items-center">
+            <div
+              className={`flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors ${
+                i < step
+                  ? "border-gold-500 bg-gold-500 text-slate-900"
+                  : i === step
+                    ? "border-gold-500 bg-gold-500 text-slate-900"
+                    : "border-slate-600 bg-slate-800 text-slate-400"
+              }`}
+            >
+              {i + 1}
+            </div>
+            {i < 2 && (
+              <div
+                className={`h-0.5 w-12 transition-colors ${
+                  i < step ? "bg-gold-500" : "bg-slate-600"
+                }`}
+              />
+            )}
+          </div>
+        ))}
+      </div>
 
-      {steps[step]}
+      <div className="space-y-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-gold-500">
+            SCHRITT {step + 1} VON 3
+          </p>
+          <h2 className="mt-1 text-2xl font-bold text-white">Eingaben für Ihre Comparator-Shortlist</h2>
+        </div>
 
-      <div className="flex justify-between gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setStep((prev) => Math.max(prev - 1, 0))}
-          disabled={step === 0 || busy}
-        >
-          Zurück
-        </Button>
+        {steps[step]}
 
-        {step < steps.length - 1 ? (
-          <Button type="button" onClick={onNext} disabled={busy}>
-            Weiter
+        <div className="flex justify-between gap-2 pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setStep((prev) => Math.max(prev - 1, 0))}
+            disabled={step === 0 || busy}
+          >
+            Zurück
           </Button>
-        ) : (
-          <Button type="button" onClick={onSubmit} disabled={busy}>
-            {busy ? "Berechne..." : "Shortlist erstellen"}
-          </Button>
-        )}
+
+          {step < steps.length - 1 ? (
+            <Button type="button" onClick={onNext} disabled={busy} className="gap-2">
+              Weiter <ChevronRight className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button type="button" onClick={onSubmit} disabled={busy}>
+              {busy ? "Berechne..." : "Shortlist erstellen"}
+            </Button>
+          )}
+        </div>
       </div>
     </Card>
   );
