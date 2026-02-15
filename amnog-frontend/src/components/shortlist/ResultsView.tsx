@@ -10,7 +10,6 @@ import type { ShortlistResponse } from "@/lib/types";
 import { downloadPdf } from "@/lib/api";
 
 import { CandidateCard } from "./CandidateCard";
-import { LeadGateDialog } from "./LeadGateDialog";
 
 export function ResultsView({ data }: { data: ShortlistResponse }) {
   const [busyPdf, setBusyPdf] = useState(false);
@@ -52,12 +51,10 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
         <div className="flex items-center gap-2">
           <Badge>Ambiguity: {data.ambiguity}</Badge>
           <Button onClick={handleDownloadPdf} disabled={busyPdf}>
-            {busyPdf ? "Lade PDF..." : "PDF herunterladen"}
+            {busyPdf ? "Lade PDF..." : "PDF exportieren"}
           </Button>
         </div>
       </header>
-
-      <LeadGateDialog runId={data.run_id} />
 
       <Separator />
 
