@@ -66,21 +66,31 @@ export function Wizard() {
     }
   };
 
-  return (
-    <Card className="space-y-4">
-      <h1 className="text-2xl font-bold">AMNOG Comparator Wizard</h1>
-      <p className="text-sm text-slate-600">Schritt {step + 1} von 3</p>
-      {steps[step]}
-      <div className="flex justify-between gap-2">
-        <Button variant="outline" onClick={() => setStep((prev) => Math.max(prev - 1, 0))} disabled={step === 0 || busy}>
-          Zurück
-        </Button>
-        {step < steps.length - 1 ? (
-          <Button onClick={onNext} disabled={busy}>Weiter</Button>
-        ) : (
-          <Button onClick={onSubmit} disabled={busy}>{busy ? "Berechne..." : "Shortlist erstellen"}</Button>
-        )}
-      </div>
-    </Card>
-  );
-}
+<div className="flex justify-between gap-2">
+  <Button
+    type="button"
+    variant="outline"
+    onClick={() => setStep((prev) => Math.max(prev - 1, 0))}
+    disabled={step === 0 || busy}
+  >
+    Zurück
+  </Button>
+
+  {step < steps.length - 1 ? (
+    <Button
+      type="button"
+      onClick={onNext}
+      disabled={busy}
+    >
+      Weiter
+    </Button>
+  ) : (
+    <Button
+      type="button"
+      onClick={onSubmit}
+      disabled={busy}
+    >
+      {busy ? "Berechne..." : "Shortlist erstellen"}
+    </Button>
+  )}
+</div>
