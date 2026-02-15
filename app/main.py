@@ -100,9 +100,20 @@ def create_lead(payload: LeadRequest) -> LeadResponse:
         raise HTTPException(status_code=404, detail="run_id not found")
 
     lead_id, saved_at = save_lead(payload.run_id, payload.email, payload.company, payload.consent)
+    correlation_id = str(uuid4())
+
+    if not RESEND_API_KEY:
+        logger.error(
+            "Lead notification aborted (missing RESEND_API_KEY) corr_id=%s run_id=%s lead_id=%s",
+            correlation_id,
+            payload.run_id,
+            lead_id,
+        )
+        raise HTTPException(status_code=500, detail="Lead saved, but email failed: RESEND_API_KEY is not configured")
 
     try:
         send_lead_notification(
+            correlation_id=correlation_id,
             run_id=payload.run_id,
             email=str(payload.email),
             company=payload.company,
@@ -110,18 +121,40 @@ def create_lead(payload: LeadRequest) -> LeadResponse:
             saved_at=saved_at,
         )
     except Exception as e:
-        logger.exception("Failed to send lead notification for lead_id=%s", lead_id)
+        logger.exception(
+            "Failed to send lead notification corr_id=%s run_id=%s lead_id=%s",
+            correlation_id,
+            payload.run_id,
+            lead_id,
+        )
         raise HTTPException(status_code=500, detail=f"Lead saved, but email failed: {e}")
 
     return LeadResponse(lead_id=lead_id, saved_at=saved_at)
 
 
 def send_lead_notification(
-    *, run_id: str, email: str, company: str | None, lead_id: int, saved_at: datetime
+    *,
+    correlation_id: str,
+    run_id: str,
+    email: str,
+    company: str | None,
+    lead_id: int,
+    saved_at: datetime,
 ) -> None:
-    if not RESEND_API_KEY:
-        logger.warning("Skipping lead notification mail because RESEND_API_KEY is not configured")
-        return
+    if not RESEND_FROM or not RESEND_FROM.strip():
+        raise ValueError("RESEND_FROM is not configured")
+    if not LEAD_NOTIFY_TO or not LEAD_NOTIFY_TO.strip():
+        raise ValueError("LEAD_NOTIFY_TO is not configured")
+
+    logger.info(
+        "Lead notification config corr_id=%s run_id=%s lead_id=%s has_resend_api_key=%s resend_from=%s lead_notify_to=%s",
+        correlation_id,
+        run_id,
+        lead_id,
+        bool(RESEND_API_KEY),
+        RESEND_FROM,
+        LEAD_NOTIFY_TO,
+    )
 
     subject = f"[zVT Navigator] New lead for run {run_id}"
     text = "\n".join(
@@ -135,25 +168,47 @@ def send_lead_notification(
         ]
     )
 
-    resp = requests.post(
-        "https://api.resend.com/emails",
-        headers={
-            "Authorization": f"Bearer {RESEND_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "from": RESEND_FROM,
-            "to": [LEAD_NOTIFY_TO],
-            "subject": subject,
-            "text": text,
-        },
-        timeout=15,
+    try:
+        resp = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            json={
+                "from": RESEND_FROM,
+                "to": [LEAD_NOTIFY_TO],
+                "subject": subject,
+                "text": text,
+            },
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Resend request failed: {exc}") from exc
+
+    logger.info(
+        "Resend response corr_id=%s run_id=%s lead_id=%s status_code=%s body=%s",
+        correlation_id,
+        run_id,
+        lead_id,
+        resp.status_code,
+        resp.text[:500],
     )
 
     if resp.status_code >= 300:
         raise RuntimeError(f"Resend send failed: {resp.status_code} {resp.text}")
 
-    logger.info("Lead notification sent via Resend (lead_id=%s)", lead_id)
+    logger.info("Lead notification sent via Resend corr_id=%s lead_id=%s", correlation_id, lead_id)
+
+
+@app.get("/api/debug/email-config")
+def debug_email_config():
+    return {
+        "has_resend_api_key": bool(RESEND_API_KEY),
+        "lead_notify_to": LEAD_NOTIFY_TO,
+        "resend_from": RESEND_FROM,
+    }
 
 @app.get("/api/export/pdf")
 def export_pdf(run_id: str):
