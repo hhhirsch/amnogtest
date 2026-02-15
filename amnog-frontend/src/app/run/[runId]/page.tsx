@@ -3,19 +3,20 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getRun } from "@/lib/api";
+import type { RunResponse } from "@/lib/types";
 
 export default function RunPage() {
   const params = useParams<{ runId: string }>();
   const runId = params?.runId;
 
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<RunResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!runId) return;
     getRun(runId)
       .then(setData)
-      .catch((e) => setErr(e instanceof Error ? e.message : "Fehler"));
+      .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Fehler"));
   }, [runId]);
 
   if (!runId) return <div style={{ padding: 24 }}>Missing runId</div>;
