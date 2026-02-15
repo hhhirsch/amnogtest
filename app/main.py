@@ -84,186 +84,188 @@ def create_lead(payload: LeadRequest) -> LeadResponse:
     lead_id, saved_at = save_lead(payload.run_id, payload.email, payload.company, payload.consent)
     return LeadResponse(lead_id=lead_id, saved_at=saved_at)
 
-@app.post("/api/export/pdf")
+@app.get("/api/export/pdf")
 def export_pdf(run_id: str):
     run = get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="run_id not found")
 
-    response_payload = run.get("response_payload") or {}
-    request_payload = run.get("request_payload") or {}
+    response_payload = run["response_payload"] or {}
+    request_payload = run["request_payload"] or {}
 
-    # ----------------------------
-    # helpers
-    # ----------------------------
-    url_pattern = re.compile(r"https?://\S+")
+    therapy_area = (request_payload.get("therapy_area") or "").strip()
+    indication = (request_payload.get("indication_text") or "").strip()
 
-    def _soft_break_url(url: str) -> str:
-        # display-only line breaks for long URLs (readability)
-        return url.replace("/", "/\n").replace("-", "-\n")
-
+    # ---------- helpers ----------
     def safe_text(txt: str) -> str:
         txt = unescape(txt or "")
-
-        # normalize common typography -> latin-1 friendly
+        # normalize typography -> latin-1 friendly for core fonts
         txt = txt.replace("\xa0", " ")
         txt = txt.replace("–", "-").replace("—", "-")
         txt = txt.replace("•", "-").replace("\u2022", "-")
         txt = txt.replace("’", "'").replace("“", '"').replace("”", '"')
-
         txt = unicodedata.normalize("NFKC", txt)
-
-        # only break URLs, not normal text
-        txt = url_pattern.sub(lambda m: _soft_break_url(m.group(0)), txt)
-
-        # hard guarantee core-font compatibility (Helvetica)
+        # ensure Helvetica/core fonts won't crash
         return txt.encode("latin-1", errors="replace").decode("latin-1")
 
-    def filename_safe(txt: str) -> str:
-        # therapy_area -> safe filename chunk
-        txt = unicodedata.normalize("NFKD", (txt or ""))
-        txt = txt.encode("ascii", errors="ignore").decode("ascii")
-        txt = txt.strip().replace(" ", "_")
-        txt = re.sub(r"[^A-Za-z0-9_\-]+", "", txt)
-        txt = re.sub(r"_+", "_", txt)
-        return txt or "Therapiegebiet"
+    def sanitize_filename(name: str) -> str:
+        # keep it simple + filesystem-safe
+        n = (name or "").strip()
+        n = (
+            n.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue")
+             .replace("Ä", "Ae").replace("Ö", "Oe").replace("Ü", "Ue")
+             .replace("ß", "ss")
+        )
+        # collapse weird chars
+        n = re.sub(r"[^A-Za-z0-9._-]+", "_", n)
+        n = re.sub(r"_+", "_", n).strip("_")
+        return n or "Export"
 
-    def v(key: str) -> str:
-        return safe_text(str(request_payload.get(key, "") or ""))
+    def wrap_url_for_display(url: str, max_len: int = 78) -> str:
+        """
+        Only for the NON-clickable display line.
+        Break long URLs in a readable way without affecting the actual hyperlink.
+        """
+        url = (url or "").strip()
+        if len(url) <= max_len:
+            return url
 
-    # ----------------------------
-    # titles / filename
-    # ----------------------------
-    therapy_area = (request_payload.get("therapy_area") or "").strip()
-    indication_text = (request_payload.get("indication_text") or "").strip()
+        parts = []
+        buf = ""
+        for ch in url:
+            buf += ch
+            # prefer breaking after / or -
+            if ch in ["/", "-"] and len(buf) >= max_len:
+                parts.append(buf)
+                buf = ""
+        if buf:
+            # hard wrap remaining if still too long
+            while len(buf) > max_len:
+                parts.append(buf[:max_len])
+                buf = buf[max_len:]
+            if buf:
+                parts.append(buf)
 
-    # PDF title inside the document
-    doc_title = " – ".join([t for t in [therapy_area, indication_text] if t]).strip()
-    if not doc_title:
-        doc_title = "AMNOG Comparator Shortlist"
+        return "\n".join(parts)
 
-    # Download filename
-    dl_name = f"{filename_safe(therapy_area)}_zVT_Shortlist.pdf"
+    def label_setting(val: str) -> str:
+        return (val or "").strip()
 
-    # ----------------------------
-    # PDF setup (fix margins / right cut-off)
-    # ----------------------------
-    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    # ---------- PDF ----------
+    pdf = FPDF(format="A4", unit="mm")
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    # explicit margins to avoid right-side cut-off
-    pdf.set_left_margin(15)
-    pdf.set_right_margin(15)
-    pdf.set_top_margin(15)
-
+    # consistent margins => avoids "right side cut off"
+    pdf.set_margins(left=15, top=15, right=15)
     pdf.add_page()
 
-    page_w = pdf.w - pdf.l_margin - pdf.r_margin  # usable width
+    effective_w = pdf.w - pdf.l_margin - pdf.r_margin
 
-    # ----------------------------
-    # header (title)
-    # ----------------------------
+    # ---- Title (Therapiegebiet – Anwendungsgebiet) ----
+    title_left = therapy_area or "AMNOG"
+    title_right = indication or ""
+    full_title = f"{title_left} - {title_right}".strip(" -")
+
     pdf.set_font("Helvetica", "B", 14)
-    pdf.multi_cell(page_w, 8, safe_text(doc_title))
+    pdf.multi_cell(effective_w, 8, safe_text(full_title))
+    pdf.ln(1)
+
+    # ---- Summary of inputs ----
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.multi_cell(effective_w, 6, safe_text("Zusammenfassung der Eingaben"))
+
+    pdf.set_font("Helvetica", size=10)
+    summary_lines = [
+        ("Therapiegebiet", therapy_area),
+        ("Anwendungsgebiet", indication),
+        ("Population (optional)", request_payload.get("population_text", "")),
+        ("Setting", label_setting(request_payload.get("setting", ""))),
+        ("Rolle", label_setting(request_payload.get("role", ""))),
+        ("Therapielinie", label_setting(request_payload.get("line", ""))),
+        ("Comparator-Typ", label_setting(request_payload.get("comparator_type", ""))),
+        ("Comparator Text (optional)", request_payload.get("comparator_text", "")),
+        ("Projektname", request_payload.get("project_name", "")),
+        ("Generiert", response_payload.get("generated_at", "")),
+    ]
+    for k, v in summary_lines:
+        pdf.multi_cell(effective_w, 5.5, safe_text(f"{k}: {v or ''}"))
     pdf.ln(2)
 
-    # ----------------------------
-    # summary of user inputs
-    # ----------------------------
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.multi_cell(page_w, 6, safe_text("Zusammenfassung der Eingaben"))
-    pdf.set_font("Helvetica", "", 10)
-
-    summary_lines = [
-        ("Therapiegebiet", v("therapy_area")),
-        ("Anwendungsgebiet", v("indication_text")),
-        ("Population (optional)", v("population_text")),
-        ("Setting", v("setting")),
-        ("Rolle", v("role")),
-        ("Therapielinie", v("line")),
-        ("Comparator-Typ", v("comparator_type")),
-        ("Comparator Text (optional)", v("comparator_text")),
-        ("Projektname", v("project_name")),
-    ]
-
-    for label, value in summary_lines:
-        if value.strip():
-            pdf.multi_cell(page_w, 5, safe_text(f"{label}: {value}"))
-
-    generated_at = response_payload.get("generated_at", "")
-    if generated_at:
-        pdf.ln(1)
-        pdf.multi_cell(page_w, 5, safe_text(f"Generiert: {generated_at}"))
-
-    pdf.ln(3)
-
-    # disclaimer (italic, as requested)
+    # ---- Disclaimer italic ----
     pdf.set_font("Helvetica", "I", 9)
     pdf.multi_cell(
-        page_w,
+        effective_w,
         5,
         safe_text(
-            "Disclaimer: Die genannten Comparatoren sind lediglich eine Näherung und stellen keine Beratung dar "
+            "Die genannten Comparatoren sind lediglich eine Näherung und stellen keine Beratung dar "
             "und wurden auf Grundlage bestehender Beschlüsse ermittelt."
         ),
     )
-    pdf.ln(4)
+    pdf.ln(3)
 
-    # ----------------------------
-    # results
-    # ----------------------------
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.multi_cell(page_w, 6, safe_text("Shortlist"))
+    # ---- Shortlist ----
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.multi_cell(effective_w, 6.5, safe_text("Shortlist"))
     pdf.ln(1)
 
-    candidates = response_payload.get("candidates", []) or []
-    for candidate in candidates:
-        rank = candidate.get("rank", "")
-        cand_txt = candidate.get("candidate_text", "")
-        conf = candidate.get("confidence", "")
-        support = candidate.get("support_score", "")
-        cases = candidate.get("support_cases", "")
-
+    for candidate in response_payload.get("candidates", []) or []:
         pdf.set_font("Helvetica", "B", 10)
-        pdf.multi_cell(page_w, 6, safe_text(f"#{rank} {cand_txt}".strip()))
-
-        pdf.set_font("Helvetica", "", 9)
         pdf.multi_cell(
-            page_w,
-            5,
-            safe_text(f"Confidence: {conf} | Support: {support} | Fälle: {cases}"),
+            effective_w,
+            5.5,
+            safe_text(f"#{candidate.get('rank', '')} {candidate.get('candidate_text', '')}"),
         )
 
-        # References (display-only, NOT clickable)
+        pdf.set_font("Helvetica", size=9)
+        pdf.multi_cell(
+            effective_w,
+            5,
+            safe_text(
+                "Confidence: {c} | Support: {s} | Fälle: {n}".format(
+                    c=candidate.get("confidence", ""),
+                    s=candidate.get("support_score", ""),
+                    n=candidate.get("support_cases", ""),
+                )
+            ),
+        )
+
+        # References: clickable title line + non-clickable small URL below
         refs = (candidate.get("references") or [])[:3]
         for ref in refs:
-            prod = ref.get("product_name", "") or ""
+            product = ref.get("product_name", "") or ""
             date = ref.get("decision_date", "") or ""
-            url = ref.get("url", "") or ""
+            url = (ref.get("url", "") or "").strip()
 
-            # line 1: "Vabysmo (2022-10-15) -> verlinkt auf ..."
-            pdf.set_font("Helvetica", "", 9)
+            display_title = f"- {product} ({date})"
+            display_url = wrap_url_for_display(url)
+
+            # clickable line
+            pdf.set_font("Helvetica", size=9)
+            pdf.set_text_color(0, 0, 255)  # blue (optional, but helps user spot links)
+            pdf.cell(effective_w, 5, safe_text(display_title), ln=1, link=url)
+
+            # non-clickable URL shown below (small, gray-ish via default black but smaller)
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font("Helvetica", size=8)
             if url:
-                pdf.multi_cell(page_w, 5, safe_text(f"- {prod} ({date}) -> verlinkt auf"))
+                pdf.multi_cell(effective_w, 4.5, safe_text(display_url))
             else:
-                pdf.multi_cell(page_w, 5, safe_text(f"- {prod} ({date})"))
+                pdf.multi_cell(effective_w, 4.5, safe_text("(keine URL)"))
 
-            # line 2: URL small below (wrapped)
-            if url:
-                pdf.set_font("Helvetica", "", 8)
-                pdf.multi_cell(page_w, 4, safe_text(f"  {url}"))
+            pdf.ln(0.5)
 
-        pdf.ln(2)
+        pdf.ln(1)
 
-    # output
+    # ---------- output ----------
     raw = pdf.output(dest="S")
     if isinstance(raw, (bytes, bytearray)):
         out = BytesIO(raw)
     else:
         out = BytesIO(str(raw).encode("latin-1", errors="replace"))
 
+    filename = f"{sanitize_filename(therapy_area)}_zVT_Shortlist.pdf"
     return StreamingResponse(
         out,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{dl_name}"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
