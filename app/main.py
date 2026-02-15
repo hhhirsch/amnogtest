@@ -108,7 +108,6 @@ def export_pdf(run_id: str):
 
     def safe_filename_component(s: str) -> str:
         s = (s or "").strip()
-        # de-umlaut for nicer filenames
         s = (
             s.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue")
              .replace("Ä", "Ae").replace("Ö", "Oe").replace("Ü", "Ue")
@@ -124,92 +123,110 @@ def export_pdf(run_id: str):
         # Nur fürs Anzeigen (nicht klickbar): weiche Umbrüche
         return (url or "").replace("/", "/\n").replace("-", "-\n")
 
+    def write_mc(pdf: FPDF, w: float, h: float, text: str):
+        # robust: always start from left margin so width is really available
+        pdf.set_x(pdf.l_margin)
+        pdf.multi_cell(w, h, safe_text(text))
+
     # ---------- PDF setup ----------
     pdf = FPDF(format="A4", unit="mm")
     pdf.set_margins(15, 15, 15)
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    # Dateiname: Therapiegebiet_zVT_Shortlist.pdf
+    # always compute a stable usable width
+    effective_w = pdf.w - pdf.l_margin - pdf.r_margin
+    if effective_w <= 10:  # sanity
+        effective_w = 180
+
     filename = f"{safe_filename_component(therapy_area)}_zVT_Shortlist.pdf"
 
     # ---------- Header / Title ----------
     pdf.set_font("Helvetica", "B", 14)
-    title = f"{therapy_area} - {indication}".strip(" -")
-    pdf.multi_cell(0, 8, safe_text(title or "AMNOG Comparator Shortlist"))
+    title = f"{therapy_area} - {indication}".strip(" -") or "AMNOG Comparator Shortlist"
+    write_mc(pdf, effective_w, 8, title)
     pdf.ln(1)
 
     # ---------- Summary ----------
     pdf.set_font("Helvetica", "B", 11)
-    pdf.multi_cell(0, 6, safe_text("Zusammenfassung der Eingaben"))
+    write_mc(pdf, effective_w, 6, "Zusammenfassung der Eingaben")
 
     pdf.set_font("Helvetica", size=10)
-    pdf.multi_cell(0, 5, safe_text(f"Therapiegebiet: {therapy_area}"))
-    pdf.multi_cell(0, 5, safe_text(f"Anwendungsgebiet: {indication}"))
-    pdf.multi_cell(0, 5, safe_text(f"Population (optional): {request_payload.get('population_text', '')}"))
-    pdf.multi_cell(0, 5, safe_text(f"Setting: {request_payload.get('setting', '')}"))
-    pdf.multi_cell(0, 5, safe_text(f"Rolle: {request_payload.get('role', '')}"))
-    pdf.multi_cell(0, 5, safe_text(f"Therapielinie: {request_payload.get('line', '')}"))
-    pdf.multi_cell(0, 5, safe_text(f"Comparator-Typ: {request_payload.get('comparator_type', '')}"))
-    pdf.multi_cell(0, 5, safe_text(f"Comparator Text (optional): {request_payload.get('comparator_text', '')}"))
-    pdf.multi_cell(0, 5, safe_text(f"Projektname: {request_payload.get('project_name', '')}"))
-    pdf.multi_cell(0, 5, safe_text(f"Generiert: {response_payload.get('generated_at', '')}"))
+    summary_lines = [
+        f"Therapiegebiet: {therapy_area}",
+        f"Anwendungsgebiet: {indication}",
+        f"Population (optional): {request_payload.get('population_text', '')}",
+        f"Setting: {request_payload.get('setting', '')}",
+        f"Rolle: {request_payload.get('role', '')}",
+        f"Therapielinie: {request_payload.get('line', '')}",
+        f"Comparator-Typ: {request_payload.get('comparator_type', '')}",
+        f"Comparator Text (optional): {request_payload.get('comparator_text', '')}",
+        f"Projektname: {request_payload.get('project_name', '')}",
+        f"Generiert: {response_payload.get('generated_at', '')}",
+    ]
+    for line in summary_lines:
+        write_mc(pdf, effective_w, 5, line)
 
     pdf.ln(2)
 
-    # ---------- Disclaimer (italic) ----------
+    # ---------- Disclaimer ----------
     pdf.set_font("Helvetica", "I", 9)
-    pdf.multi_cell(
-        0,
+    write_mc(
+        pdf,
+        effective_w,
         5,
-        safe_text(
-            "Die genannten Comparatoren sind lediglich eine Näherung und stellen keine Beratung dar "
-            "und wurden auf Grundlage bestehender Beschlüsse ermittelt."
-        ),
+        "Die genannten Comparatoren sind lediglich eine Näherung und stellen keine Beratung dar "
+        "und wurden auf Grundlage bestehender Beschlüsse ermittelt.",
     )
-
     pdf.ln(3)
 
     # ---------- Shortlist ----------
     pdf.set_font("Helvetica", "B", 11)
-    pdf.multi_cell(0, 6, safe_text("Shortlist"))
+    write_mc(pdf, effective_w, 6, "Shortlist")
     pdf.ln(1)
 
     for candidate in (response_payload.get("candidates") or []):
         pdf.set_font("Helvetica", "B", 10)
-        pdf.multi_cell(
-            0,
+        write_mc(
+            pdf,
+            effective_w,
             6,
-            safe_text(f"#{candidate.get('rank', '')} {candidate.get('candidate_text', '')}"),
+            f"#{candidate.get('rank', '')} {candidate.get('candidate_text', '')}",
         )
+
+        # score formatting (prevents long floats from looking “cut”)
+        s = candidate.get("support_score", "")
+        try:
+            s = f"{float(s):.3f}"
+        except Exception:
+            pass
 
         pdf.set_font("Helvetica", size=9)
         conf_line = "Confidence: {c} | Support: {s} | Fälle: {n}".format(
             c=candidate.get("confidence", ""),
-            s=candidate.get("support_score", ""),
+            s=s,
             n=candidate.get("support_cases", ""),
         )
-        pdf.multi_cell(0, 5, safe_text(conf_line))
+        write_mc(pdf, effective_w, 5, conf_line)
 
-        # References:
-        # 1) klickbarer kurzer Text: "- Produkt (Datum)" -> Link
-        # 2) URL darunter klein als Anzeige (nicht klickbar), darf umbrechen
         for ref in (candidate.get("references") or [])[:3]:
             product = ref.get("product_name", "") or ""
             date = ref.get("decision_date", "") or ""
             url = (ref.get("url", "") or "").strip()
 
-            clickable_label = safe_text(f"- {product} ({date})")
-
+            # Line 1: clickable label (cell is more reliable than multi_cell for links)
             pdf.set_font("Helvetica", size=9)
+            pdf.set_x(pdf.l_margin)
+            clickable_label = safe_text(f"- {product} ({date})")
             if url.startswith("http://") or url.startswith("https://"):
-                pdf.multi_cell(0, 5, clickable_label, link=url)
+                pdf.cell(effective_w, 5, clickable_label, ln=1, link=url)
             else:
-                pdf.multi_cell(0, 5, clickable_label)
+                pdf.cell(effective_w, 5, clickable_label, ln=1)
 
+            # Line 2: URL display (small, NOT clickable)
             if url:
                 pdf.set_font("Helvetica", size=7)
-                pdf.multi_cell(0, 4, safe_text(soft_break_url_display(url)))
+                write_mc(pdf, effective_w, 4, soft_break_url_display(url))
 
         pdf.ln(1)
 
