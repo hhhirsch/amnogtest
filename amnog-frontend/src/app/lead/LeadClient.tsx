@@ -56,29 +56,37 @@ export default function LeadClient() {
   };
 
   return (
-    <Card className="mx-auto max-w-xl space-y-4">
-      <h1 className="text-2xl font-semibold">E-Mail speichern</h1>
-      <p className="text-sm text-slate-600">
-        Hinterlegen Sie Ihre E-Mail-Adresse, um die Ergebnisse aufzurufen und optional als PDF zu exportieren.
-      </p>
+    <section
+      className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-900/10 bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: 'url("/assets/89374AF2-03B6-478F-908E-521C995CEB97.png")' }}
+    >
+      <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px]" />
+      <div className="relative p-3 sm:p-6">
+        <Card className="mx-auto max-w-xl space-y-4">
+          <h1 className="text-2xl font-semibold">Fast geschafft!</h1>
+          <p className="text-sm text-slate-600">
+            Hinterlegen Sie Ihre E-Mail-Adresse, um die Ergebnisse aufzurufen und optional als PDF zu exportieren.
+          </p>
 
-      <form className="space-y-3" onSubmit={onSubmit}>
-        <Input
-          type="email"
-          required
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="name@firma.de"
-        />
-        <Input
-          value={company}
-          onChange={(event) => setCompany(event.target.value)}
-          placeholder="Firma (optional)"
-        />
-        <Button type="submit" disabled={busy || !emailIsValid}>
-          {busy ? "Speichere..." : "E-Mail speichern"}
-        </Button>
-      </form>
-    </Card>
+          <form className="space-y-3" onSubmit={onSubmit}>
+            <Input
+              type="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="name@firma.de"
+            />
+            <Input
+              value={company}
+              onChange={(event) => setCompany(event.target.value)}
+              placeholder="Firma (optional)"
+            />
+            <Button type="submit" disabled={busy || !emailIsValid}>
+              {busy ? "Speichere..." : "Shortlist anzeigen"}
+            </Button>
+          </form>
+        </Card>
+      </div>
+    </section>
   );
 }
