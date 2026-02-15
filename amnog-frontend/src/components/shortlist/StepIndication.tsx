@@ -10,7 +10,7 @@ export function StepIndication({ values, onChange }: Props) {
   return (
     <div className="space-y-4">
       <div>
-        <label className="mb-1 block text-sm font-medium">Anwendungsgebiet (min. 50 Zeichen)</label>
+        <label className="mb-1 block text-sm font-medium">Anwendungsgebiet</label>
         <Textarea value={values.indication_text ?? ""} onChange={(e) => onChange({ indication_text: e.target.value })} />
       </div>
       <div>

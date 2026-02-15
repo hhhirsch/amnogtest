@@ -4,7 +4,7 @@ import { COMPARATOR_TYPES, LINES, ROLES, SETTINGS, THERAPY_AREAS } from "./types
 export const ShortlistRequestSchema = z.object({
   therapy_area: z.enum(THERAPY_AREAS),
   project_name: z.string().optional(),
-  indication_text: z.string().min(50).max(6000),
+  indication_text: z.string().max(6000),
   population_text: z.string().optional(),
   setting: z.enum(SETTINGS),
   role: z.enum(ROLES),
