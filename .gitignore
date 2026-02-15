@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+
+# Next.js
+amnog-frontend/node_modules/
+amnog-frontend/.next/
+amnog-frontend/package-lock.json
