@@ -70,7 +70,7 @@ export function Wizard() {
     try {
       const response = await createShortlist(parsed.data);
       localStorage.removeItem(STORAGE_KEY);
-      router.push(`/run/${response.run_id}`);
+      router.push(`/lead/${response.run_id}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unbekannter Fehler");
     } finally {
