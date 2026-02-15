@@ -25,6 +25,16 @@ from app.store import get_run, init_db, save_lead, save_run
 
 app = FastAPI(title="AMNOG Comparator Shortlist MVP", version="0.1.0")
 
+PDF_SCORING_EXPLANATION_LINES = [
+    "Support ist die Evidenzstärke aus ähnlichen, aktuellen und passenden G-BA-Beschlüssen.",
+    "Höherer Support bedeutet: mehr und/oder passendere Evidenz in vergleichbaren Fällen.",
+    "Fälle ist die Zahl unterschiedlicher Entscheidungen (decision_id), die einen Kandidaten stützen.",
+    "Confidence (hoch/mittel/niedrig) leitet sich aus Support und Anzahl der Fälle ab.",
+    "Ambiguity beschreibt, wie nah die Scores der Top-Kandidaten beieinander liegen.",
+    "Hohe Ambiguity bedeutet: mehrere Optionen sind ähnlich plausibel.",
+    "Support ist relativ innerhalb dieser Anfrage und keine klinische Empfehlung.",
+]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://amnogtest-546n.vercel.app"],
@@ -195,6 +205,12 @@ def export_pdf(run_id: str):
         font=("Helvetica", "I", 9),
     )
     pdf.ln(3)
+
+    # ---------- Result context ----------
+    mc(6, "Einordnung der Ergebnisse", font=("Helvetica", "B", 11))
+    for line in PDF_SCORING_EXPLANATION_LINES:
+        mc(5, f"- {line}", font=("Helvetica", "", 9))
+    pdf.ln(2)
 
     # ---------- Shortlist ----------
     mc(6, "Shortlist", font=("Helvetica", "B", 11))
