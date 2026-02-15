@@ -80,7 +80,7 @@ export function Wizard() {
 
   return (
     <Card className="space-y-4">
-      <h1 className="text-2xl font-bold">AMNOG Comparator Wizard</h1>
+      <h2 className="text-2xl font-bold">Eingaben für Ihre Comparator-Shortlist</h2>
       <p className="text-sm text-slate-600">Schritt {step + 1} von 3</p>
 
       {steps[step]}

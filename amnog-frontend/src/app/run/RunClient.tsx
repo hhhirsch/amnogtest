@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ResultsView } from "@/components/shortlist/ResultsView";
 import { ScoringExplanationCard } from "@/components/shortlist/ScoringExplanationCard";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { getRun } from "@/lib/api";
 import type { RunResponse } from "@/lib/types";
 
 export default function RunClient() {
+  const router = useRouter();
   const params = useParams<{ runId: string }>();
   const runId = params?.runId;
   const [data, setData] = useState<RunResponse | null>(null);
@@ -22,8 +23,17 @@ export default function RunClient() {
       return;
     }
 
+    if (typeof window !== "undefined") {
+      const isLeadSubmitted = localStorage.getItem(`lead_submitted:${runId}`) === "true";
+      if (!isLeadSubmitted) {
+        router.replace(`/lead/${runId}`);
+        return;
+      }
+    }
+
     let mounted = true;
     setLoading(true);
+
     getRun(runId)
       .then((response) => {
         if (!mounted) return;
@@ -41,7 +51,7 @@ export default function RunClient() {
     return () => {
       mounted = false;
     };
-  }, [runId]);
+  }, [router, runId]);
 
   if (loading) {
     return <div className="p-6">Lade Run...</div>;
@@ -57,9 +67,17 @@ export default function RunClient() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <ResultsView data={data.response_payload} />
-      <ScoringExplanationCard compact />
+
+      <details className="rounded-lg border border-slate-200 bg-white p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-900">
+          Wie die Shortlist entsteht (MVP)
+        </summary>
+        <div className="mt-3">
+          <ScoringExplanationCard compact />
+        </div>
+      </details>
     </div>
   );
 }

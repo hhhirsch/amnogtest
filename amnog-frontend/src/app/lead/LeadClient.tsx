@@ -1,21 +1,24 @@
 "use client";
 
-import Link from "next/link";
-import { FormEvent, useState } from "react";
-import { useParams } from "next/navigation";
+import { FormEvent, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { createLead, API_BASE } from "@/lib/api";
+import { createLead } from "@/lib/api";
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LeadClient() {
+  const router = useRouter();
   const params = useParams<{ runId: string }>();
   const runId = params?.runId;
   const [email, setEmail] = useState("");
   const [company, setCompany] = useState("");
   const [busy, setBusy] = useState(false);
-  const [downloadStarted, setDownloadStarted] = useState(false);
+
+  const emailIsValid = useMemo(() => EMAIL_REGEX.test(email.trim()), [email]);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -25,11 +28,26 @@ export default function LeadClient() {
       return;
     }
 
+    if (!emailIsValid) {
+      toast.error("Bitte eine gültige E-Mail-Adresse eingeben.");
+      return;
+    }
+
     setBusy(true);
     try {
-      await createLead(runId, email.trim(), company.trim() || undefined);
-      window.location.href = `${API_BASE}/api/export/pdf?run_id=${encodeURIComponent(runId)}`;
-      setDownloadStarted(true);
+      const normalizedEmail = email.trim();
+      const normalizedCompany = company.trim() || undefined;
+
+      await createLead(runId, normalizedEmail, normalizedCompany);
+      await fetch("/api/notify-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId, email: normalizedEmail, company: normalizedCompany }),
+      });
+
+      localStorage.setItem(`lead_submitted:${runId}`, "true");
+      toast.success("Vielen Dank! Ihre Angaben wurden gespeichert.");
+      router.push(`/run/${runId}`);
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Lead konnte nicht gespeichert werden.");
     } finally {
@@ -39,9 +57,9 @@ export default function LeadClient() {
 
   return (
     <Card className="mx-auto max-w-xl space-y-4">
-      <h1 className="text-2xl font-semibold">PDF herunterladen</h1>
+      <h1 className="text-2xl font-semibold">E-Mail speichern</h1>
       <p className="text-sm text-slate-600">
-        Bitte hinterlegen Sie Ihre E-Mail-Adresse, damit wir Ihnen die Shortlist als PDF bereitstellen können.
+        Hinterlegen Sie Ihre E-Mail-Adresse, um die Ergebnisse aufzurufen und optional als PDF zu exportieren.
       </p>
 
       <form className="space-y-3" onSubmit={onSubmit}>
@@ -57,19 +75,10 @@ export default function LeadClient() {
           onChange={(event) => setCompany(event.target.value)}
           placeholder="Firma (optional)"
         />
-        <Button type="submit" disabled={busy}>
-          {busy ? "Speichere..." : "E-Mail speichern & PDF herunterladen"}
+        <Button type="submit" disabled={busy || !emailIsValid}>
+          {busy ? "Speichere..." : "E-Mail speichern"}
         </Button>
       </form>
-
-      {runId && (
-        <p className="text-sm text-slate-600">
-          {downloadStarted ? "Download gestartet. " : "Optional: "}
-          <Link className="underline" href={`/run/${runId}`}>
-            Zur Ergebnis-Seite
-          </Link>
-        </p>
-      )}
     </Card>
   );
 }
