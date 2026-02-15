@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import os
-import smtplib
+import requests
 import unicodedata
 import logging
 from datetime import datetime
@@ -31,11 +31,8 @@ app = FastAPI(title="AMNOG Comparator Shortlist MVP", version="0.1.0")
 logger = logging.getLogger(__name__)
 
 LEAD_NOTIFY_TO = os.getenv("LEAD_NOTIFY_TO", "hirsch.hans92@gmail.com")
-SMTP_HOST = os.getenv("SMTP_HOST")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASS = os.getenv("SMTP_PASS")
-SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "noreply@amnogtest.local")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+RESEND_FROM = os.getenv("RESEND_FROM", "onboarding@resend.dev")  # ok for testing
 
 PDF_SCORING_EXPLANATION_LINES = [
     "Support ist die Evidenzstärke aus ähnlichen, aktuellen und passenden G-BA-Beschlüssen.",
@@ -95,7 +92,6 @@ def read_run(run_id: str) -> RunResponse:
         raise HTTPException(status_code=404, detail="run_id not found")
     return RunResponse(**run)
 
-
 @app.post("/api/leads", response_model=LeadResponse)
 def create_lead(payload: LeadRequest) -> LeadResponse:
     if not payload.consent:
@@ -104,6 +100,7 @@ def create_lead(payload: LeadRequest) -> LeadResponse:
         raise HTTPException(status_code=404, detail="run_id not found")
 
     lead_id, saved_at = save_lead(payload.run_id, payload.email, payload.company, payload.consent)
+
     try:
         send_lead_notification(
             run_id=payload.run_id,
@@ -112,41 +109,51 @@ def create_lead(payload: LeadRequest) -> LeadResponse:
             lead_id=lead_id,
             saved_at=saved_at,
         )
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to send lead notification for lead_id=%s", lead_id)
+        raise HTTPException(status_code=500, detail=f"Lead saved, but email failed: {e}")
+
     return LeadResponse(lead_id=lead_id, saved_at=saved_at)
 
 
 def send_lead_notification(
     *, run_id: str, email: str, company: str | None, lead_id: int, saved_at: datetime
 ) -> None:
-    if not SMTP_HOST:
-        logger.warning("Skipping lead notification mail because SMTP_HOST is not configured")
+    if not RESEND_API_KEY:
+        logger.warning("Skipping lead notification mail because RESEND_API_KEY is not configured")
         return
 
-    msg = EmailMessage()
-    msg["Subject"] = f"[AMNOG] New lead for run {run_id}"
-    msg["From"] = SMTP_FROM
-    msg["To"] = LEAD_NOTIFY_TO
-    msg.set_content(
-        "\n".join(
-            [
-                "Ein neuer Lead wurde gespeichert.",
-                f"lead_id: {lead_id}",
-                f"run_id: {run_id}",
-                f"email: {email}",
-                f"company: {company or '-'}",
-                f"saved_at: {saved_at.isoformat()}",
-            ]
-        )
+    subject = f"[zVT Navigator] New lead for run {run_id}"
+    text = "\n".join(
+        [
+            "Ein neuer Lead wurde gespeichert.",
+            f"lead_id: {lead_id}",
+            f"run_id: {run_id}",
+            f"email: {email}",
+            f"company: {company or '-'}",
+            f"saved_at: {saved_at.isoformat()}",
+        ]
     )
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
-        smtp.ehlo()
-        if SMTP_USER and SMTP_PASS:
-            smtp.starttls()
-            smtp.login(SMTP_USER, SMTP_PASS)
-        smtp.send_message(msg)
+    resp = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "from": RESEND_FROM,
+            "to": [LEAD_NOTIFY_TO],
+            "subject": subject,
+            "text": text,
+        },
+        timeout=15,
+    )
+
+    if resp.status_code >= 300:
+        raise RuntimeError(f"Resend send failed: {resp.status_code} {resp.text}")
+
+    logger.info("Lead notification sent via Resend (lead_id=%s)", lead_id)
 
 @app.get("/api/export/pdf")
 def export_pdf(run_id: str):
