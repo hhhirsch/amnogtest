@@ -9,8 +9,8 @@ const config: Config = {
         bg: "#0f172a",
         surface: "#0f172a",
         ink: "#e2e8f0",
-        "ink-soft": "#94a3b8",
-        surface2: "#1e293b",
+        "ink-muted": "#94a3b8",
+        surface: "#1e293b",
         gold: {
           DEFAULT: "#e8b84b",
           dark: "#1a1206",
