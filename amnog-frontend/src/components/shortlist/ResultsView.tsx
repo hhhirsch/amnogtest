@@ -60,59 +60,42 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
         </div>
       </header>
 
-        <div className="flex flex-wrap items-center gap-2 mt-3">
-          <Badge variant="gold">Ambiguity: {data.ambiguity}</Badge>
-          <Badge>
-            <Users className="h-3 w-3" />
-            {data.candidates.length} Kandidaten
-          </Badge>
-          <button
-            onClick={handleDownloadPdf}
-            disabled={busyPdf}
-            className="inline-flex items-center gap-1.5 bg-gold text-gold-dark text-[11px] font-semibold rounded-lg px-3.5 py-1.5 hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="h-4 w-4" />
-            {busyPdf ? "Lade PDF..." : "PDF exportieren"}
-          </button>
-        </div>
+      <div className="flex flex-wrap items-center gap-2 mt-3">
+        <Badge variant="gold">Ambiguity: {data.ambiguity}</Badge>
+        <Badge>
+          <Users className="h-3 w-3" />
+          {data.candidates.length} Kandidaten
+        </Badge>
+        <button
+          onClick={handleDownloadPdf}
+          disabled={busyPdf}
+          className="inline-flex items-center gap-1.5 bg-gold text-gold-dark text-[11px] font-semibold rounded-lg px-3.5 py-1.5 hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download className="h-4 w-4" />
+          {busyPdf ? "Lade PDF..." : "PDF exportieren"}
+        </button>
+      </div>
 
-        <div className="flex">
-          <div className="flex-1 rounded-l-xl border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
-            <span className="block font-serif text-[24px] leading-none text-gold">{data.candidates.length}</span>
-            <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Kandidaten</span>
-          </div>
-          <div className="flex-1 border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
-            <span className="block font-serif text-[24px] leading-none text-gold">
-              {data.candidates[0]?.support_score.toFixed(2) ?? "—"}
-            </span>
-            <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Top-Score</span>
-          </div>
-          <div className="flex-1 border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
-            <span className="block font-serif text-[24px] leading-none text-gold">
-              {data.candidates.reduce((sum, c) => sum + c.support_cases, 0)}
-            </span>
-            <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">G-BA-Fälle</span>
-          </div>
-          <div className="flex-1 rounded-r-xl border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
-            <span className="block truncate font-serif text-[24px] leading-none text-gold">{data.run_id.slice(0, 8)}</span>
-            <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Run-ID</span>
-          </div>
+      <div className="flex">
+        <div className="flex-1 rounded-l-xl border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
+          <span className="block font-serif text-[24px] leading-none text-gold">{data.candidates.length}</span>
+          <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Kandidaten</span>
         </div>
-        <div>
-          <p className="text-slate-400">Top-Score</p>
-          <p className="text-lg font-semibold text-white">
+        <div className="flex-1 border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
+          <span className="block font-serif text-[24px] leading-none text-gold">
             {data.candidates[0]?.support_score.toFixed(2) ?? "—"}
-          </p>
+          </span>
+          <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Top-Score</span>
         </div>
-        <div>
-          <p className="text-slate-400">G-BA-Fälle</p>
-          <p className="text-lg font-semibold text-white">
+        <div className="flex-1 border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
+          <span className="block font-serif text-[24px] leading-none text-gold">
             {data.candidates.reduce((sum, c) => sum + c.support_cases, 0)}
-          </p>
+          </span>
+          <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">G-BA-Fälle</span>
         </div>
-        <div>
-          <p className="text-slate-400">Run-ID</p>
-          <p className="truncate text-lg font-semibold text-white">{data.run_id.slice(0, 8)}</p>
+        <div className="flex-1 rounded-r-xl border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
+          <span className="block truncate font-serif text-[24px] leading-none text-gold">{data.run_id.slice(0, 8)}</span>
+          <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Run-ID</span>
         </div>
       </div>
 

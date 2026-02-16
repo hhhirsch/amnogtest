@@ -3,22 +3,13 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import type { CandidateResult } from "@/lib/types";
-
-const confidenceMap: Record<CandidateResult["confidence"], { label: string; variant: "red" | "yellow" | "green" }> = {
-  niedrig: { label: "Low confidence", variant: "red" },
-  mittel: { label: "Medium confidence", variant: "yellow" },
-  hoch: { label: "High confidence", variant: "green" },
-};
 
 export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
   const [expanded, setExpanded] = useState(false);
   const [showReferences, setShowReferences] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
-
-  const confidence = confidenceMap[candidate.confidence];
 
   return (
     <div 
@@ -29,99 +20,42 @@ export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
       }}
     >
       {/* Card body */}
-      <div className="flex">
+      <div className="flex gap-4 p-4">
         {/* Left rank stripe */}
         <div className="w-11 flex-shrink-0 bg-bg2 border-r border-white/[0.07] flex items-start justify-center pt-4">
           <span className="font-serif text-[18px] text-gold italic">{candidate.rank}</span>
         </div>
 
-        <p className={expanded ? "text-slate-300" : "line-clamp-3 text-slate-300"}>
-          {candidate.candidate_text}
-        </p>
+        {/* Right: Content */}
+        <div className="flex-1 space-y-3">
+          <p className={expanded ? "text-slate-300" : "line-clamp-3 text-slate-300"}>
+            {candidate.candidate_text}
+          </p>
 
-        {/* Score Bar */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex-1 h-[3px] bg-bg2 rounded-full overflow-hidden">
-            <motion.div
-              className="h-full bg-gradient-to-r from-gold to-[#f0c55a] rounded-full"
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.min(candidate.support_score * 100, 100)}%` }}
-              transition={{ duration: 1, ease: [0.4, 0, 0.2, 1] }}
-            />
-          </div>
-          <span className="text-[11px] font-medium text-gold min-w-[28px] text-right">
-            {candidate.support_score.toFixed(2)}
-          </span>
-        </div>
-
-        <button
-          className="text-sm text-gold-500 hover:underline"
-          onClick={() => setExpanded((prev) => !prev)}
-        >
-          {expanded ? "Weniger anzeigen" : "Mehr anzeigen"}
-        </button>
-
-        {/* Support Score Progress Bar */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Support Score</span>
-            <span className="font-semibold text-white">{candidate.support_score.toFixed(2)}</span>
-          </div>
-
-        {/* Collapsible Evidence Section */}
-        <div>
           <button
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-gold opacity-85 bg-transparent border-none cursor-pointer"
-            onClick={() => setShowEvidence((prev) => !prev)}
-          >
-            Evidence
-            <svg
-              className={`w-3 h-3 transition-transform ${showEvidence ? "rotate-180" : ""}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {showEvidence && (
-            <div className="relative">
-              {candidate.references.map((ref) => (
-                <div
-                  key={`${ref.decision_id}-${ref.url}`}
-                  className="relative border-t border-white/[0.07] ml-11 px-4 py-3"
-                >
-                  {/* 2px left accent bar */}
-                  <div className="absolute left-0 h-[calc(100%-28px)] top-3.5 w-[2px] bg-gold/15 rounded-full" />
-                  
-                  {/* Drug name and date */}
-                  <div className="flex justify-between items-start">
-                    <span className="text-[12px] font-medium text-gold">{ref.product_name}</span>
-                    <span className="text-[10px] text-ink-muted">{ref.decision_date}</span>
-                  </div>
-                  
-                  {/* Description text */}
-                  <p className="text-[12px] text-ink-soft leading-relaxed mt-1">{ref.snippet}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="text-sm text-slate-400">Fälle: {candidate.support_cases}</div>
-
-        {/* Expandable References */}
-        <div>
-          <button
-            className="text-sm text-gold-500 hover:underline mb-3"
+            className="text-sm text-gold-500 hover:underline"
             onClick={() => setExpanded((prev) => !prev)}
           >
             {expanded ? "Weniger anzeigen" : "Mehr anzeigen"}
           </button>
 
+          {/* Score Bar */}
+          <div className="flex items-center gap-2.5">
+            <div className="flex-1 h-[3px] bg-bg2 rounded-full overflow-hidden">
+              <motion.div
+                className="h-full bg-gradient-to-r from-gold to-[#f0c55a] rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min(candidate.support_score * 100, 100)}%` }}
+                transition={{ duration: 1, ease: [0.4, 0, 0.2, 1] }}
+              />
+            </div>
+            <span className="text-[11px] font-medium text-gold min-w-[28px] text-right">
+              {candidate.support_score.toFixed(2)}
+            </span>
+          </div>
+
           {/* Support Score Progress Bar */}
-          <div className="space-y-1.5 mb-3">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-400">Support Score</span>
               <span className="font-semibold text-white">{candidate.support_score.toFixed(2)}</span>
@@ -129,7 +63,48 @@ export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
             <Progress value={candidate.support_score} max={1} />
           </div>
 
-          <div className="text-sm text-slate-400 mb-3">Fälle: {candidate.support_cases}</div>
+          <div className="text-sm text-slate-400">Fälle: {candidate.support_cases}</div>
+
+          {/* Collapsible Evidence Section */}
+          <div>
+            <button
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-gold opacity-85 bg-transparent border-none cursor-pointer"
+              onClick={() => setShowEvidence((prev) => !prev)}
+            >
+              Evidence
+              <svg
+                className={`w-3 h-3 transition-transform ${showEvidence ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {showEvidence && (
+              <div className="relative mt-2">
+                {candidate.references.map((ref) => (
+                  <div
+                    key={`${ref.decision_id}-${ref.url}`}
+                    className="relative border-t border-white/[0.07] px-4 py-3"
+                  >
+                    {/* 2px left accent bar */}
+                    <div className="absolute left-0 h-[calc(100%-28px)] top-3.5 w-[2px] bg-gold/15 rounded-full" />
+                    
+                    {/* Drug name and date */}
+                    <div className="flex justify-between items-start">
+                      <span className="text-[12px] font-medium text-gold">{ref.product_name}</span>
+                      <span className="text-[10px] text-ink-muted">{ref.decision_date}</span>
+                    </div>
+                    
+                    {/* Description text */}
+                    <p className="text-[12px] text-ink-soft leading-relaxed mt-1">{ref.snippet}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Expandable References */}
           <div>

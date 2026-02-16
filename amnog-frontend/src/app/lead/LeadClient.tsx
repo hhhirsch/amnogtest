@@ -83,7 +83,7 @@ export default function LeadClient() {
             {busy ? "Speichere..." : "Shortlist anzeigen"}
           </Button>
         </form>
-      </Card>
+      </EmailGateCard>
 
       {runId && (
         <div className="mx-auto max-w-xl border border-dashed border-white/[0.13] rounded-[10px] px-4 py-3 flex items-center gap-2.5 mt-6 mb-12">
