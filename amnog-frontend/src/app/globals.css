@@ -16,6 +16,22 @@ body::after {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' /%3E%3C/svg%3E");
 }
 
+/* Fix autofill styles for dark theme across all browsers */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: #e2e8f0 !important;
+  -webkit-box-shadow: 0 0 0px 1000px #1c2133 inset !important;
+  transition: background-color 5000s ease-in-out 0s !important;
+}
+
+/* Ensure select dropdowns have dark background */
+select option {
+  background-color: #1c2133;
+  color: #e2e8f0;
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;

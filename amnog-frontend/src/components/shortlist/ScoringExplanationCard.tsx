@@ -19,7 +19,7 @@ export function ScoringExplanationCard({ compact = false }: ScoringExplanationCa
         <p className="text-sm text-slate-400">
           Support ist die Evidenzstärke aus ähnlichen, aktuellen und passenden Beschlüssen. Höher bedeutet mehr Evidenz.
         </p>
-        <Accordion title="Mehr erfahren" showBadge={true} badgeText="MVP">
+        <Accordion title="Mehr erfahren">
           <div className="mt-2 space-y-3">
             <FullExplanation />
           </div>

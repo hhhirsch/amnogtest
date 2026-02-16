@@ -1,4 +1,4 @@
-export const SCORING_EXPLANATION_TITLE = "Wie die Shortlist entsteht (MVP)";
+export const SCORING_EXPLANATION_TITLE = "Wie die Shortlist entsteht";
 
 export const SCORING_EXPLANATION_BULLETS = [
   "Wir filtern zuerst auf das ausgewählte Therapiegebiet.",

@@ -72,21 +72,12 @@ export default function RunClient() {
 
       <details className="rounded-lg border border-slate-700 bg-slate-800 p-4">
         <summary className="cursor-pointer text-sm font-semibold text-white">
-          Wie die Shortlist entsteht (MVP)
+          Wie die Shortlist entsteht
         </summary>
         <div className="mt-3">
           <ScoringExplanationCard compact />
         </div>
       </details>
-
-      <div className="border border-dashed border-white/[0.13] rounded-[10px] px-4 py-3 flex items-center gap-2.5 mt-6 mb-12">
-        <span className="text-[9px] font-semibold tracking-[0.1em] uppercase text-ink-muted flex-shrink-0">
-          Run ID
-        </span>
-        <span className="text-[10px] text-ink-muted font-mono overflow-hidden text-ellipsis whitespace-nowrap">
-          {runId}
-        </span>
-      </div>
     </div>
   );
 }
