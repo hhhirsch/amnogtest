@@ -8,6 +8,9 @@ const config: Config = {
       colors: {
         bg: "#0f172a",
         ink: "#e2e8f0",
+        surface: "#1e293b",
+        "ink-soft": "#cbd5e1",
+        "ink-muted": "#94a3b8",
         gold: {
           DEFAULT: "#C9A227",
           50: "#FDF8E8",
@@ -25,6 +28,9 @@ const config: Config = {
       fontFamily: {
         sans: ['"DM Sans"', 'sans-serif'],
         serif: ['"Instrument Serif"', 'serif'],
+      },
+      transitionDuration: {
+        '250': '250ms',
       },
     },
   },
