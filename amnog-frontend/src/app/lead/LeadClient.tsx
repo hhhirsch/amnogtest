@@ -4,9 +4,9 @@ import { FormEvent, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { createLead } from "@/lib/api";
+import { Mail } from "lucide-react";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -56,10 +56,21 @@ export default function LeadClient() {
   };
 
   return (
-    <section>
-      <Card className="mx-auto max-w-xl space-y-4">
-        <h1 className="text-2xl font-semibold text-white">Fast geschafft!</h1>
-        <p className="text-sm text-slate-400">
+    <section className="flex items-center justify-center min-h-[80vh]">
+      <div className="bg-surface border border-white/[0.13] rounded-[20px] p-8 shadow-[0_24px_64px_rgba(0,0,0,0.5)] relative overflow-hidden max-w-xl w-full">
+        {/* Gold top-line gradient */}
+        <div className="absolute h-0.5 inset-x-0 top-0 bg-gradient-to-r from-transparent via-gold to-transparent opacity-60" />
+        
+        {/* Icon box */}
+        <div className="w-12 h-12 rounded-xl bg-gold/10 border border-gold/25 flex items-center justify-center mb-4">
+          <Mail className="w-6 h-6 text-gold" />
+        </div>
+        
+        {/* Title */}
+        <h1 className="font-serif text-[28px] text-ink leading-snug mb-2">Fast geschafft!</h1>
+        
+        {/* Description */}
+        <p className="text-sm text-ink-soft font-light leading-relaxed mb-6">
           Hinterlegen Sie Ihre E-Mail-Adresse, um die Ergebnisse aufzurufen und optional als PDF zu exportieren.
         </p>
 
@@ -76,11 +87,15 @@ export default function LeadClient() {
             onChange={(event) => setCompany(event.target.value)}
             placeholder="Firma (optional)"
           />
-          <Button type="submit" disabled={busy || !emailIsValid}>
+          <Button 
+            type="submit" 
+            disabled={busy || !emailIsValid}
+            className="w-full rounded-[10px] py-3.5 bg-gold hover:bg-gold/90 text-slate-900 font-medium"
+          >
             {busy ? "Speichere..." : "Shortlist anzeigen"}
           </Button>
         </form>
-      </Card>
+      </div>
     </section>
   );
 }
