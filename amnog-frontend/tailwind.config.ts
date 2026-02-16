@@ -8,8 +8,11 @@ const config: Config = {
       colors: {
         bg: "#0f172a",
         bg2: "#1e293b",
-        ink: "#e2e8f0",
-        "ink-muted": "#94a3b8",
+        ink: {
+          DEFAULT: "#e2e8f0",
+          soft: "#94a3b8",
+          muted: "#64748b",
+        },
         gold: {
           DEFAULT: "#e8b84b",
           dark: "#1a1206",
