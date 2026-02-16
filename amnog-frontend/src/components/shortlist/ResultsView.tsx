@@ -64,26 +64,26 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
           </Button>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 rounded-lg border border-slate-700 bg-slate-800 p-4 text-sm sm:grid-cols-4">
-          <div>
-            <p className="text-slate-400">Kandidaten</p>
-            <p className="text-lg font-semibold text-white">{data.candidates.length}</p>
+        <div className="flex">
+          <div className="flex-1 rounded-l-xl border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
+            <span className="block font-serif text-[24px] leading-none text-gold">{data.candidates.length}</span>
+            <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Kandidaten</span>
           </div>
-          <div>
-            <p className="text-slate-400">Top-Score</p>
-            <p className="text-lg font-semibold text-white">
+          <div className="flex-1 border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
+            <span className="block font-serif text-[24px] leading-none text-gold">
               {data.candidates[0]?.support_score.toFixed(2) ?? "—"}
-            </p>
+            </span>
+            <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Top-Score</span>
           </div>
-          <div>
-            <p className="text-slate-400">G-BA-Fälle</p>
-            <p className="text-lg font-semibold text-white">
+          <div className="flex-1 border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
+            <span className="block font-serif text-[24px] leading-none text-gold">
               {data.candidates.reduce((sum, c) => sum + c.support_cases, 0)}
-            </p>
+            </span>
+            <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">G-BA-Fälle</span>
           </div>
-          <div>
-            <p className="text-slate-400">Run-ID</p>
-            <p className="truncate text-lg font-semibold text-white">{data.run_id.slice(0, 8)}</p>
+          <div className="flex-1 rounded-r-xl border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
+            <span className="block truncate font-serif text-[24px] leading-none text-gold">{data.run_id.slice(0, 8)}</span>
+            <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Run-ID</span>
           </div>
         </div>
       </header>
