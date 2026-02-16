@@ -12,7 +12,7 @@ export function StepTherapyArea({ values, onChange }: Props) {
   return (
     <div className="space-y-4">
       <div>
-        <label className="mb-1 block text-sm font-medium">Therapiegebiet</label>
+        <label className="text-[11px] font-medium tracking-[0.07em] uppercase text-ink-soft mb-2 flex items-center justify-between">Therapiegebiet</label>
         <Select
           value={values.therapy_area ?? ""}
           onChange={(e) => onChange({ therapy_area: e.target.value as ShortlistRequestInput["therapy_area"] })}
@@ -28,7 +28,10 @@ export function StepTherapyArea({ values, onChange }: Props) {
         </Select>
       </div>
       <div>
-        <label className="mb-1 block text-sm font-medium">Projektname (optional)</label>
+        <label className="text-[11px] font-medium tracking-[0.07em] uppercase text-ink-soft mb-2 flex items-center justify-between">
+          Projektname
+          <span className="text-[10px] normal-case tracking-normal font-normal text-ink-muted bg-bg2 rounded px-1.5 py-0.5">optional</span>
+        </label>
         <Input value={values.project_name ?? ""} onChange={(e) => onChange({ project_name: e.target.value })} />
       </div>
     </div>
