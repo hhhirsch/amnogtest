@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmailGateCard } from "@/components/ui/email-gate-card";
 import { createLead, downloadPdf } from "@/lib/api";
 
 export function LeadGateDialog({ runId }: { runId: string }) {
@@ -43,18 +43,35 @@ export function LeadGateDialog({ runId }: { runId: string }) {
   }
 
   return (
-    <Card className="space-y-3">
-      <h3 className="text-lg font-semibold">Fast geschafft!</h3>
-      <Input placeholder="E-Mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-      <Input placeholder="Firma (optional)" value={company} onChange={(e) => setCompany(e.target.value)} />
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-        Ich stimme der Kontaktaufnahme zu.
-      </label>
-      <div className="flex gap-2">
-        <Button onClick={onSubmit} disabled={busy}>{busy ? "Lädt..." : "Shortlist anzeigen"}</Button>
-        <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Abbrechen</Button>
+    <EmailGateCard 
+      title="Fast geschafft!"
+      description="Bitte geben Sie Ihre E-Mail-Adresse ein, um fortzufahren."
+    >
+      <div className="space-y-3">
+        <Input placeholder="E-Mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <Input placeholder="Firma (optional)" value={company} onChange={(e) => setCompany(e.target.value)} />
+        <label className="flex items-center gap-2 text-sm text-ink-soft">
+          <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+          Ich stimme der Kontaktaufnahme zu.
+        </label>
+        <div className="flex flex-col gap-2 pt-2">
+          <Button 
+            onClick={onSubmit} 
+            disabled={busy}
+            className="w-full rounded-[10px] py-3.5 bg-gold hover:bg-gold/90 text-slate-900 font-medium"
+          >
+            {busy ? "Lädt..." : "Shortlist anzeigen"}
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setOpen(false)} 
+            disabled={busy}
+            className="w-full rounded-[10px] py-3.5"
+          >
+            Abbrechen
+          </Button>
+        </div>
       </div>
-    </Card>
+    </EmailGateCard>
   );
 }
