@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -38,6 +39,21 @@ export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
         <p className={expanded ? "text-slate-300" : "line-clamp-3 text-slate-300"}>
           {candidate.candidate_text}
         </p>
+
+        {/* Score Bar */}
+        <div className="flex items-center gap-2.5">
+          <div className="flex-1 h-[3px] bg-bg2 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-gradient-to-r from-gold to-[#f0c55a] rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: `${candidate.support_score * 100}%` }}
+              transition={{ duration: 1, ease: [0.4, 0, 0.2, 1] }}
+            />
+          </div>
+          <span className="text-[11px] font-medium text-gold min-w-[28px] text-right">
+            {candidate.support_score.toFixed(2)}
+          </span>
+        </div>
 
         <button
           className="text-sm text-gold-500 hover:underline"

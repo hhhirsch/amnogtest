@@ -46,7 +46,7 @@ PDF_SCORING_EXPLANATION_LINES = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://amnogtest-546n.vercel.app"],
+    allow_origins=["https://amnogtest-546n.vercel.app", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
