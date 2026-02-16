@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { Download, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import type { ShortlistResponse } from "@/lib/types";
 import { downloadPdf } from "@/lib/api";
 
@@ -52,16 +51,20 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
           </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 mt-3">
           <Badge variant="gold">Ambiguity: {data.ambiguity}</Badge>
           <Badge>
             <Users className="h-3 w-3" />
             {data.candidates.length} Kandidaten
           </Badge>
-          <Button onClick={handleDownloadPdf} disabled={busyPdf} size="sm" className="gap-2">
+          <button
+            onClick={handleDownloadPdf}
+            disabled={busyPdf}
+            className="inline-flex items-center gap-1.5 bg-gold text-[#1a1206] text-[11px] font-semibold rounded-lg px-3.5 py-1.5 hover:bg-[#f0c55a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <Download className="h-4 w-4" />
             {busyPdf ? "Lade PDF..." : "PDF exportieren"}
-          </Button>
+          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-4 rounded-lg border border-slate-700 bg-slate-800 p-4 text-sm sm:grid-cols-4">
