@@ -6,19 +6,20 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        gold: {
-          DEFAULT: "#C9A227",
-          50: "#FDF8E8",
-          100: "#FAF0D1",
-          200: "#F5E1A3",
-          300: "#F0D275",
-          400: "#EBC347",
-          500: "#C9A227",
-          600: "#A1821F",
-          700: "#796217",
-          800: "#514110",
-          900: "#292108",
-        },
+        bg: "#0f1218",
+        bg2: "#161b24",
+        surface: "#1e2535",
+        surface2: "#252d3d",
+        gold: "#e8b84b",
+        "gold-dim": "rgba(232,184,75,0.15)",
+        "gold-glow": "rgba(232,184,75,0.25)",
+        ink: "#f0f2f7",
+        "ink-soft": "#9ba4b8",
+        "ink-muted": "#5a6378",
+      },
+      fontFamily: {
+        serif: ["Instrument Serif", "Georgia", "serif"],
+        sans: ["DM Sans", "system-ui", "sans-serif"],
       },
     },
   },
