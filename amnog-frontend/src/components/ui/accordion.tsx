@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,13 +20,28 @@ export function Accordion({
   defaultOpen = false 
 }: AccordionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const contentId = useId();
+
+  const handleToggle = () => setIsOpen(!isOpen);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleToggle();
+    }
+  };
 
   return (
     <div className="bg-surface border border-white/[0.13] rounded-[14px] overflow-hidden">
       {/* Header */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        aria-controls={contentId}
         className="flex items-center justify-between px-5 py-4 cursor-pointer select-none"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggle}
+        onKeyDown={handleKeyDown}
       >
         <div className="text-[13px] font-medium text-ink-soft flex items-center gap-2.5">
           <span>{title}</span>
@@ -46,7 +61,11 @@ export function Accordion({
 
       {/* Body */}
       {isOpen && (
-        <div className="text-[13px] text-ink-muted leading-relaxed px-5 pb-4 border-t border-white/[0.07]">
+        <div 
+          id={contentId}
+          role="region"
+          className="text-[13px] text-ink-muted leading-relaxed px-5 pb-4 border-t border-white/[0.07]"
+        >
           {children}
         </div>
       )}
