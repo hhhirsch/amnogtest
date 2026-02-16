@@ -13,7 +13,7 @@ const config: Config = {
           soft: "#cbd5e1",
         },
         gold: {
-          DEFAULT: "#e8b84b",
+          DEFAULT: "#C9A227",
           50: "#FDF8E8",
           100: "#FAF0D1",
           200: "#F5E1A3",

@@ -12,6 +12,28 @@ import { StepTherapyArea } from "./StepTherapyArea";
 
 const STORAGE_KEY = "amnog-shortlist-draft";
 
+// Button styles
+const BACK_BUTTON_CLASSES = "flex items-center gap-1.5 text-[13px] font-medium text-ink-muted bg-transparent border border-white/[0.13] rounded-[9px] px-4 py-2.5 transition-all hover:border-ink-soft hover:text-ink-soft disabled:opacity-25 disabled:cursor-not-allowed";
+const NEXT_BUTTON_CLASSES = "group flex items-center gap-2 text-[14px] font-semibold text-[#1a1206] bg-[#e8b84b] border-none rounded-[9px] px-6 py-2.5 transition-all shadow-[0_4px_20px_rgba(232,184,75,0.25)] hover:bg-[#f0c55a] hover:shadow-[0_6px_28px_rgba(232,184,75,0.4)] hover:-translate-y-px disabled:opacity-25 disabled:cursor-not-allowed";
+
+// Right arrow SVG icon component
+const RightArrowIcon = () => (
+  <svg 
+    className="h-4 w-4 transition-transform group-hover:translate-x-[3px]" 
+    viewBox="0 0 16 16" 
+    fill="none" 
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path 
+      d="M6 3L11 8L6 13" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 function loadDraft(): Partial<ShortlistRequestInput> {
   if (typeof window === "undefined") return {};
   try {
@@ -120,7 +142,7 @@ export function Wizard() {
             type="button"
             onClick={() => setStep((prev) => Math.max(prev - 1, 0))}
             disabled={step === 0 || busy}
-            className="flex items-center gap-1.5 text-[13px] font-medium text-ink-muted bg-transparent border border-white/[0.13] rounded-[9px] px-4 py-2.5 transition-all hover:border-ink-soft hover:text-ink-soft disabled:opacity-25 disabled:cursor-not-allowed"
+            className={BACK_BUTTON_CLASSES}
           >
             Zurück
           </button>
@@ -130,46 +152,20 @@ export function Wizard() {
               type="button" 
               onClick={onNext} 
               disabled={busy}
-              className="group flex items-center gap-2 text-[14px] font-semibold text-[#1a1206] bg-gold border-none rounded-[9px] px-6 py-2.5 transition-all shadow-[0_4px_20px_rgba(232,184,75,0.25)] hover:bg-[#f0c55a] hover:shadow-[0_6px_28px_rgba(232,184,75,0.4)] hover:-translate-y-px disabled:opacity-25 disabled:cursor-not-allowed"
+              className={NEXT_BUTTON_CLASSES}
             >
               Weiter 
-              <svg 
-                className="h-4 w-4 transition-transform group-hover:translate-x-[3px]" 
-                viewBox="0 0 16 16" 
-                fill="none" 
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path 
-                  d="M6 3L11 8L6 13" 
-                  stroke="currentColor" 
-                  strokeWidth="2" 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <RightArrowIcon />
             </button>
           ) : (
             <button 
               type="button" 
               onClick={onSubmit} 
               disabled={busy}
-              className="group flex items-center gap-2 text-[14px] font-semibold text-[#1a1206] bg-gold border-none rounded-[9px] px-6 py-2.5 transition-all shadow-[0_4px_20px_rgba(232,184,75,0.25)] hover:bg-[#f0c55a] hover:shadow-[0_6px_28px_rgba(232,184,75,0.4)] hover:-translate-y-px disabled:opacity-25 disabled:cursor-not-allowed"
+              className={NEXT_BUTTON_CLASSES}
             >
               {busy ? "Berechne..." : "Shortlist erstellen"}
-              <svg 
-                className="h-4 w-4 transition-transform group-hover:translate-x-[3px]" 
-                viewBox="0 0 16 16" 
-                fill="none" 
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path 
-                  d="M6 3L11 8L6 13" 
-                  stroke="currentColor" 
-                  strokeWidth="2" 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <RightArrowIcon />
             </button>
           )}
         </div>
