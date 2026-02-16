@@ -16,7 +16,7 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
         WebkitTextFillColor: '#e2e8f0',
         WebkitBoxShadow: '0 0 0px 1000px #1c2133 inset',
         transition: 'background-color 5000s ease-in-out 0s'
-      } as React.CSSProperties}
+      }}
       {...props}
     />
   );

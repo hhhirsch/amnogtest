@@ -97,7 +97,7 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-0">
+      <div className="grid grid-cols-3">
         <div className="rounded-l-xl border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
           <span className="block font-serif text-[24px] leading-none text-gold">{data.candidates.length}</span>
           <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Kandidaten</span>
