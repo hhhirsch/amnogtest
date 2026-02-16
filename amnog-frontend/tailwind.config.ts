@@ -7,7 +7,11 @@ const config: Config = {
     extend: {
       colors: {
         bg: "#0f172a",
-        ink: "#e2e8f0",
+        ink: {
+          DEFAULT: "#e2e8f0",
+          muted: "#94a3b8",
+          soft: "#cbd5e1",
+        },
         gold: {
           DEFAULT: "#C9A227",
           50: "#FDF8E8",
