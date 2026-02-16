@@ -18,8 +18,8 @@ const config: Config = {
         "ink-muted": "#5a6378",
       },
       fontFamily: {
-        serif: ["Instrument Serif"],
-        sans: ["DM Sans"],
+        serif: ["Instrument Serif", "Georgia", "serif"],
+        sans: ["DM Sans", "system-ui", "sans-serif"],
       },
     },
   },
