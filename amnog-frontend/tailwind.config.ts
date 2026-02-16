@@ -8,6 +8,7 @@ const config: Config = {
       colors: {
         bg: "#0f172a",
         ink: "#e2e8f0",
+        surface: "#1e293b",
         gold: {
           DEFAULT: "#C9A227",
           50: "#FDF8E8",

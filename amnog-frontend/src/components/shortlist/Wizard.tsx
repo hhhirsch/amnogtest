@@ -80,7 +80,9 @@ export function Wizard() {
   };
 
   return (
-    <Card goldBorder className="space-y-6">
+    <Card goldBorder className="bg-surface rounded-[20px] border border-white/[0.13] overflow-hidden shadow-[0_24px_64px_rgba(0,0,0,0.5)] space-y-6">
+      {/* Gold top-line */}
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-gold to-transparent opacity-60" />
       {/* Step Indicator */}
       <div className="flex items-center justify-center gap-2">
         {[0, 1, 2].map((i) => (
