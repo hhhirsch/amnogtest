@@ -158,39 +158,27 @@ export function Wizard() {
         </div>
 
         {steps[step]}
+      </div>
 
-        <div className="flex justify-between gap-2 pt-2">
-          <button
-            type="button"
-            onClick={() => setStep((prev) => Math.max(prev - 1, 0))}
-            disabled={step === 0 || busy}
-            className={BACK_BUTTON_CLASSES}
-          >
-            Zurück
-          </button>
+      <div className="flex items-center justify-between pt-4 pb-5 px-6 mt-2 border-t border-white/[0.07]">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setStep((prev) => Math.max(prev - 1, 0))}
+          disabled={step === 0 || busy}
+        >
+          Zurück
+        </Button>
 
-          {step < steps.length - 1 ? (
-            <button 
-              type="button" 
-              onClick={onNext} 
-              disabled={busy}
-              className={NEXT_BUTTON_CLASSES}
-            >
-              Weiter 
-              <RightArrowIcon />
-            </button>
-          ) : (
-            <button 
-              type="button" 
-              onClick={onSubmit} 
-              disabled={busy}
-              className={NEXT_BUTTON_CLASSES}
-            >
-              {busy ? "Berechne..." : "Shortlist erstellen"}
-              <RightArrowIcon />
-            </button>
-          )}
-        </div>
+        {step < steps.length - 1 ? (
+          <Button type="button" onClick={onNext} disabled={busy} className="gap-2">
+            Weiter <ChevronRight className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button type="button" onClick={onSubmit} disabled={busy}>
+            {busy ? "Berechne..." : "Shortlist erstellen"}
+          </Button>
+        )}
       </div>
     </Card>
   );
