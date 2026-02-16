@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmailGateCard } from "@/components/ui/email-gate-card";
+import { PrivacyPolicyModal } from "@/components/ui/privacy-policy";
 import { createLead } from "@/lib/api";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -16,7 +17,9 @@ export default function LeadClient() {
   const runId = params?.runId;
   const [email, setEmail] = useState("");
   const [company, setCompany] = useState("");
+  const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [consentError, setConsentError] = useState(false);
 
   const emailIsValid = useMemo(() => EMAIL_REGEX.test(email.trim()), [email]);
 
@@ -30,6 +33,12 @@ export default function LeadClient() {
 
     if (!emailIsValid) {
       toast.error("Bitte eine gültige E-Mail-Adresse eingeben.");
+      return;
+    }
+
+    if (!consent) {
+      setConsentError(true);
+      toast.error("Bitte stimmen Sie der Datenschutzerklärung zu.");
       return;
     }
 
@@ -56,12 +65,20 @@ export default function LeadClient() {
   };
 
   return (
-    <section className="flex items-center justify-center min-h-[80vh]">
+    <section className="flex items-center justify-center min-h-[80vh] px-4">
       <EmailGateCard
         title="Fast geschafft!"
         description="Hinterlegen Sie Ihre E-Mail-Adresse, um die Ergebnisse aufzurufen und optional als PDF zu exportieren."
         className="max-w-xl w-full"
       >
+        <div className="mb-4 p-3 bg-slate-800/50 border border-white/[0.08] rounded-lg">
+          <p className="text-xs text-slate-300 leading-relaxed">
+            <strong>Datenschutzhinweis:</strong> Ich verarbeite deine E-Mail-Adresse (Pflichtangabe) und optional 
+            den Firmennamen zur Bearbeitung deiner Anfrage und zur Kontaktaufnahme. Details findest du in der{" "}
+            <PrivacyPolicyModal />.
+          </p>
+        </div>
+
         <form className="space-y-3" onSubmit={onSubmit}>
           <Input
             type="email"
@@ -75,26 +92,39 @@ export default function LeadClient() {
             onChange={(event) => setCompany(event.target.value)}
             placeholder="Firma (optional)"
           />
+          
+          <div>
+            <label className="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => {
+                  setConsent(e.target.checked);
+                  setConsentError(false);
+                }}
+                className="mt-0.5 cursor-pointer accent-gold"
+              />
+              <span>
+                Ich habe die <PrivacyPolicyModal /> gelesen und bin mit der Verarbeitung meiner Angaben 
+                zur Kontaktaufnahme einverstanden.
+              </span>
+            </label>
+            {consentError && (
+              <p className="text-xs text-red-400 mt-1.5 ml-6">
+                Bitte stimmen Sie der Datenschutzerklärung zu.
+              </p>
+            )}
+          </div>
+
           <Button 
             type="submit" 
-            disabled={busy || !emailIsValid}
+            disabled={busy || !emailIsValid || !consent}
             className="w-full rounded-[10px] py-3.5 bg-gold hover:bg-gold/90 text-slate-900 font-medium"
           >
             {busy ? "Speichere..." : "Shortlist anzeigen"}
           </Button>
         </form>
       </EmailGateCard>
-
-      {runId && (
-        <div className="mx-auto max-w-xl border border-dashed border-white/[0.13] rounded-[10px] px-4 py-3 flex items-center gap-2.5 mt-6 mb-12">
-          <span className="text-[9px] font-semibold tracking-[0.1em] uppercase text-ink-muted flex-shrink-0">
-            Run ID
-          </span>
-          <span className="text-[10px] text-ink-muted font-mono overflow-hidden text-ellipsis whitespace-nowrap">
-            {runId}
-          </span>
-        </div>
-      )}
     </section>
   );
 }

@@ -1,6 +1,5 @@
 import { ScoringExplanationCard } from "@/components/shortlist/ScoringExplanationCard";
 import { Wizard } from "@/components/shortlist/Wizard";
-import { Badge } from "@/components/ui/badge";
 
 const INTRO_TEXT =
   "Im AMNOG-Verfahren ist die Wahl der zweckmäßigen Vergleichstherapie zentral: Sie bestimmt, gegen welche Therapie der Zusatznutzen bewertet wird und beeinflusst damit Studiendesign, Evidenzbewertung und Verhandlungsspielräume. Dieses Tool hilft, passende Comparator-Kandidaten aus bisherigen G-BA-Entscheidungen datenbasiert zu identifizieren.";
@@ -22,7 +21,7 @@ export default function Home() {
 
       <details className="rounded-lg border border-slate-700 bg-slate-800 p-4">
         <summary className="flex cursor-pointer items-center gap-2 text-base font-semibold text-white">
-          Wie die Shortlist entsteht <Badge variant="gold">MVP</Badge>
+          Wie die Shortlist entsteht
         </summary>
         <div className="mt-4">
           <ScoringExplanationCard />
