@@ -100,28 +100,50 @@ export function Wizard() {
   };
 
   return (
-    <Card goldBorder className="space-y-6">
+    <Card className="bg-surface rounded-[20px] border border-white/[0.13] overflow-hidden shadow-[0_24px_64px_rgba(0,0,0,0.5)] space-y-6">
+      {/* Gold top-line */}
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-gold to-transparent opacity-60" />
       {/* Step Indicator */}
-      <div className="flex items-center justify-center gap-2">
+      <div className="flex items-center justify-center">
         {[0, 1, 2].map((i) => (
           <div key={i} className="flex items-center">
             <div
-              className={`flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors ${
+              className={`flex h-[34px] w-[34px] items-center justify-center rounded-full border-2 text-xs transition-all ${
                 i < step
-                  ? "border-gold-500 bg-gold-500 text-slate-900"
+                  ? "border-gold bg-gold/15 text-gold"
                   : i === step
-                    ? "border-gold-500 bg-gold-500 text-slate-900"
-                    : "border-slate-600 bg-slate-800 text-slate-400"
+                    ? "border-gold bg-gold text-gold-dark font-semibold shadow-[0_0_0_6px_rgba(232,184,75,0.15),0_4px_16px_rgba(232,184,75,0.3)]"
+                    : "border-white/20 bg-bg2 text-ink-muted font-medium"
               }`}
             >
-              {i + 1}
+              {i < step ? (
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M11.6666 3.5L5.24992 9.91667L2.33325 7"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              ) : (
+                i + 1
+              )}
             </div>
             {i < 2 && (
-              <div
-                className={`h-0.5 w-12 transition-colors ${
-                  i < step ? "bg-gold-500" : "bg-slate-600"
-                }`}
-              />
+              <div className="relative h-0.5 flex-1 mx-2 bg-white/10">
+                <div
+                  className={`absolute inset-0 bg-gold transition-all duration-500 ${
+                    i < step ? "w-full" : "w-0"
+                  }`}
+                />
+              </div>
             )}
           </div>
         ))}
