@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Download, Users } from "lucide-react";
+import { Download, Users, Mail } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { ShortlistResponse } from "@/lib/types";
@@ -39,6 +39,14 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
     }
   };
 
+  const handleContactClick = () => {
+    const subject = encodeURIComponent("zVT Navigator – Kontaktaufnahme");
+    const body = encodeURIComponent(
+      `Hallo,\n\nich möchte Kontakt aufnehmen bezüglich meiner Analyse.\n\nRun-ID: ${data.run_id}\nTherapiegebiet: ${data.therapy_area || "nicht angegeben"}\n\nViele Grüße`
+    );
+    window.location.href = `mailto:hans.hirsch@cytel.com?subject=${subject}&body=${body}`;
+  };
+
   return (
     <section className="space-y-6">
       <header 
@@ -73,6 +81,13 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
         >
           <Download className="h-4 w-4" />
           {busyPdf ? "Lade PDF..." : "PDF exportieren"}
+        </button>
+        <button
+          onClick={handleContactClick}
+          className="inline-flex items-center gap-1.5 bg-gold text-gold-dark text-[11px] font-semibold rounded-lg px-3.5 py-1.5 hover:bg-gold-hover transition-colors"
+        >
+          <Mail className="h-4 w-4" />
+          Kontakt aufnehmen
         </button>
       </div>
 

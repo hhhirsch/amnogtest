@@ -3,7 +3,7 @@ import { Wizard } from "@/components/shortlist/Wizard";
 import { Badge } from "@/components/ui/badge";
 
 const INTRO_TEXT =
-  "Im AMNOG-Verfahren ist die Wahl des zweckmäßigen Vergleichers zentral: Sie bestimmt, gegen welche Therapie der Zusatznutzen bewertet wird und beeinflusst damit Studiendesign, Evidenzbewertung und Verhandlungsspielräume. Dieses Tool hilft, passende Comparator-Kandidaten aus bisherigen G-BA-Entscheidungen datenbasiert zu identifizieren.";
+  "Im AMNOG-Verfahren ist die Wahl der zweckmäßigen Vergleichstherapie zentral: Sie bestimmt, gegen welche Therapie der Zusatznutzen bewertet wird und beeinflusst damit Studiendesign, Evidenzbewertung und Verhandlungsspielräume. Dieses Tool hilft, passende Comparator-Kandidaten aus bisherigen G-BA-Entscheidungen datenbasiert zu identifizieren.";
 
 export default function Home() {
   return (
