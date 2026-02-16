@@ -16,6 +16,7 @@ const confidenceMap: Record<CandidateResult["confidence"], { label: string; vari
 export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
   const [expanded, setExpanded] = useState(false);
   const [showReferences, setShowReferences] = useState(false);
+  const [showEvidence, setShowEvidence] = useState(false);
 
   const confidence = confidenceMap[candidate.confidence];
 
@@ -67,6 +68,51 @@ export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
             <span className="font-semibold text-white">{candidate.support_score.toFixed(2)}</span>
           </div>
 
+        {/* Collapsible Evidence Section */}
+        <div>
+          <button
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-gold opacity-85 bg-transparent border-none cursor-pointer"
+            onClick={() => setShowEvidence((prev) => !prev)}
+          >
+            Evidence
+            <svg
+              className={`w-3 h-3 transition-transform ${showEvidence ? "rotate-180" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {showEvidence && (
+            <div className="relative">
+              {candidate.references.map((ref) => (
+                <div
+                  key={`${ref.decision_id}-${ref.url}`}
+                  className="relative border-t border-white/[0.07] ml-11 px-4 py-3"
+                >
+                  {/* 2px left accent bar */}
+                  <div className="absolute left-0 h-[calc(100%-28px)] top-3.5 w-[2px] bg-gold/15 rounded-full" />
+                  
+                  {/* Drug name and date */}
+                  <div className="flex justify-between items-start">
+                    <span className="text-[12px] font-medium text-gold">{ref.product_name}</span>
+                    <span className="text-[10px] text-ink-muted">{ref.decision_date}</span>
+                  </div>
+                  
+                  {/* Description text */}
+                  <p className="text-[12px] text-ink-soft leading-relaxed mt-1">{ref.snippet}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="text-sm text-slate-400">Fälle: {candidate.support_cases}</div>
+
+        {/* Expandable References */}
+        <div>
           <button
             className="text-sm text-gold-500 hover:underline mb-3"
             onClick={() => setExpanded((prev) => !prev)}
