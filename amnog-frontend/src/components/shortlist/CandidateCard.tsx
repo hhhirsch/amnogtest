@@ -46,7 +46,7 @@ export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
             <motion.div
               className="h-full bg-gradient-to-r from-gold to-[#f0c55a] rounded-full"
               initial={{ width: 0 }}
-              animate={{ width: `${candidate.support_score * 100}%` }}
+              animate={{ width: `${Math.min(candidate.support_score * 100, 100)}%` }}
               transition={{ duration: 1, ease: [0.4, 0, 0.2, 1] }}
             />
           </div>
