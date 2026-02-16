@@ -42,7 +42,7 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
   const handleContactClick = () => {
     const subject = encodeURIComponent("zVT Navigator – Kontaktaufnahme");
     const body = encodeURIComponent(
-      `Hallo,\n\nich möchte Kontakt aufnehmen bezüglich meiner Analyse.\n\nRun-ID: ${data.run_id}\nTherapiegebiet: ${data.therapy_area || "nicht angegeben"}\n\nViele Grüße`
+      `Hallo,\n\nich möchte Kontakt aufnehmen bezüglich meiner Analyse.\n\nRun-ID: ${data.run_id}\n\nViele Grüße`
     );
     window.location.href = `mailto:hans.hirsch@cytel.com?subject=${subject}&body=${body}`;
   };
