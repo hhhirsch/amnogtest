@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card";
+import { Accordion } from "@/components/ui/accordion";
 import {
   SCORING_EXPLANATION_BULLETS,
   SCORING_EXPLANATION_TITLE,
@@ -18,12 +19,11 @@ export function ScoringExplanationCard({ compact = false }: ScoringExplanationCa
         <p className="text-sm text-slate-400">
           Support ist die Evidenzstärke aus ähnlichen, aktuellen und passenden Beschlüssen. Höher bedeutet mehr Evidenz.
         </p>
-        <details className="text-sm text-slate-400">
-          <summary className="cursor-pointer font-medium text-slate-200">Mehr erfahren</summary>
+        <Accordion title="Mehr erfahren" showBadge={true} badgeText="MVP">
           <div className="mt-2 space-y-3">
             <FullExplanation />
           </div>
-        </details>
+        </Accordion>
       </Card>
     );
   }

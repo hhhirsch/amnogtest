@@ -31,6 +31,9 @@ const config: Config = {
         sans: ['"DM Sans"', 'sans-serif'],
         serif: ['"Instrument Serif"', 'serif'],
       },
+      transitionDuration: {
+        '250': '250ms',
+      },
     },
   },
   plugins: [],
