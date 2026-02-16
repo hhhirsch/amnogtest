@@ -37,20 +37,13 @@ export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
         <div className="flex-1 px-4 pt-4 pb-3.5">
           {/* Header row */}
           <div className="flex items-start justify-between gap-2 mb-3">
-            <h3 className="text-[13px] font-medium text-ink leading-snug flex-1">
+            <h3 className={`text-[13px] font-medium text-ink leading-snug flex-1 ${!expanded ? 'line-clamp-2' : ''}`}>
               {candidate.candidate_text}
             </h3>
             <Badge variant={confidence.variant} dot>
               {confidence.label}
             </Badge>
           </div>
-
-          {/* Expandable content */}
-          {expanded && (
-            <p className="text-slate-300 mb-3">
-              {candidate.candidate_text}
-            </p>
-          )}
 
           <button
             className="text-sm text-gold-500 hover:underline mb-3"
