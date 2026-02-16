@@ -3,16 +3,36 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { createShortlist } from "@/lib/api";
 import { ShortlistRequestSchema, type ShortlistRequestInput } from "@/lib/validators";
 import { StepContext } from "./StepContext";
 import { StepIndication } from "./StepIndication";
 import { StepTherapyArea } from "./StepTherapyArea";
-import { ChevronRight } from "lucide-react";
 
 const STORAGE_KEY = "amnog-shortlist-draft";
+
+// Button styles
+const BACK_BUTTON_CLASSES = "flex items-center gap-1.5 text-[13px] font-medium text-ink-muted bg-transparent border border-white/[0.13] rounded-[9px] px-4 py-2.5 transition-all hover:border-ink-soft hover:text-ink-soft disabled:opacity-25 disabled:cursor-not-allowed";
+const NEXT_BUTTON_CLASSES = "group flex items-center gap-2 text-[14px] font-semibold text-[#1a1206] bg-[#e8b84b] border-none rounded-[9px] px-6 py-2.5 transition-all shadow-[0_4px_20px_rgba(232,184,75,0.25)] hover:bg-[#f0c55a] hover:shadow-[0_6px_28px_rgba(232,184,75,0.4)] hover:-translate-y-px disabled:opacity-25 disabled:cursor-not-allowed";
+
+// Right arrow SVG icon component
+const RightArrowIcon = () => (
+  <svg 
+    className="h-4 w-4 transition-transform group-hover:translate-x-[3px]" 
+    viewBox="0 0 16 16" 
+    fill="none" 
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path 
+      d="M6 3L11 8L6 13" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    />
+  </svg>
+);
 
 function loadDraft(): Partial<ShortlistRequestInput> {
   if (typeof window === "undefined") return {};
@@ -140,23 +160,35 @@ export function Wizard() {
         {steps[step]}
 
         <div className="flex justify-between gap-2 pt-2">
-          <Button
+          <button
             type="button"
-            variant="outline"
             onClick={() => setStep((prev) => Math.max(prev - 1, 0))}
             disabled={step === 0 || busy}
+            className={BACK_BUTTON_CLASSES}
           >
             Zurück
-          </Button>
+          </button>
 
           {step < steps.length - 1 ? (
-            <Button type="button" onClick={onNext} disabled={busy} className="gap-2">
-              Weiter <ChevronRight className="h-4 w-4" />
-            </Button>
+            <button 
+              type="button" 
+              onClick={onNext} 
+              disabled={busy}
+              className={NEXT_BUTTON_CLASSES}
+            >
+              Weiter 
+              <RightArrowIcon />
+            </button>
           ) : (
-            <Button type="button" onClick={onSubmit} disabled={busy}>
+            <button 
+              type="button" 
+              onClick={onSubmit} 
+              disabled={busy}
+              className={NEXT_BUTTON_CLASSES}
+            >
               {busy ? "Berechne..." : "Shortlist erstellen"}
-            </Button>
+              <RightArrowIcon />
+            </button>
           )}
         </div>
       </div>
