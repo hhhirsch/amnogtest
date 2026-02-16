@@ -77,16 +77,16 @@ export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
             <div className="relative">
               {candidate.references.map((ref) => (
                 <div
-                  key={ref.decision_id + ref.url}
+                  key={`${ref.decision_id}-${ref.url}`}
                   className="relative border-t border-white/[0.07] ml-11 px-4 py-3"
                 >
                   {/* 2px left accent bar */}
                   <div className="absolute left-0 h-[calc(100%-28px)] top-3.5 w-[2px] bg-gold/15 rounded-full" />
                   
                   {/* Drug name and date */}
-                  <div>
+                  <div className="flex justify-between items-start">
                     <span className="text-[12px] font-medium text-gold">{ref.product_name}</span>
-                    <span className="text-[10px] text-ink-muted float-right">{ref.decision_date}</span>
+                    <span className="text-[10px] text-ink-muted">{ref.decision_date}</span>
                   </div>
                   
                   {/* Description text */}
