@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Toaster } from "sonner";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-bg text-ink font-sans min-h-screen">
         <main className="mx-auto min-h-screen w-full max-w-4xl p-6">{children}</main>
         <Toaster richColors position="top-right" />
+        <Analytics />
       </body>
     </html>
   );
