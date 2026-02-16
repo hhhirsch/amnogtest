@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -33,16 +34,37 @@ export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
           <span className="font-serif text-[18px] text-gold italic">{candidate.rank}</span>
         </div>
 
-        {/* Right content area */}
-        <div className="flex-1 px-4 pt-4 pb-3.5">
-          {/* Header row */}
-          <div className="flex items-start justify-between gap-2 mb-3">
-            <h3 className={`text-[13px] font-medium text-ink leading-snug flex-1 ${!expanded ? 'line-clamp-2' : ''}`}>
-              {candidate.candidate_text}
-            </h3>
-            <Badge variant={confidence.variant} dot>
-              {confidence.label}
-            </Badge>
+        <p className={expanded ? "text-slate-300" : "line-clamp-3 text-slate-300"}>
+          {candidate.candidate_text}
+        </p>
+
+        {/* Score Bar */}
+        <div className="flex items-center gap-2.5">
+          <div className="flex-1 h-[3px] bg-bg2 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-gradient-to-r from-gold to-[#f0c55a] rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.min(candidate.support_score * 100, 100)}%` }}
+              transition={{ duration: 1, ease: [0.4, 0, 0.2, 1] }}
+            />
+          </div>
+          <span className="text-[11px] font-medium text-gold min-w-[28px] text-right">
+            {candidate.support_score.toFixed(2)}
+          </span>
+        </div>
+
+        <button
+          className="text-sm text-gold-500 hover:underline"
+          onClick={() => setExpanded((prev) => !prev)}
+        >
+          {expanded ? "Weniger anzeigen" : "Mehr anzeigen"}
+        </button>
+
+        {/* Support Score Progress Bar */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">Support Score</span>
+            <span className="font-semibold text-white">{candidate.support_score.toFixed(2)}</span>
           </div>
 
           <button
