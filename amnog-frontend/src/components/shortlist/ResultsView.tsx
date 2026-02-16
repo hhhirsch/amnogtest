@@ -60,7 +60,7 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
           <button
             onClick={handleDownloadPdf}
             disabled={busyPdf}
-            className="inline-flex items-center gap-1.5 bg-gold text-[#1a1206] text-[11px] font-semibold rounded-lg px-3.5 py-1.5 hover:bg-[#f0c55a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 bg-gold text-gold-dark text-[11px] font-semibold rounded-lg px-3.5 py-1.5 hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="h-4 w-4" />
             {busyPdf ? "Lade PDF..." : "PDF exportieren"}

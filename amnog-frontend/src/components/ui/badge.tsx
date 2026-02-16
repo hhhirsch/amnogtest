@@ -29,8 +29,11 @@ export interface BadgeProps
 export function Badge({ className, variant, dot, children, ...props }: BadgeProps) {
   return (
     <div className={cn(badgeVariants({ variant, className }))} {...props}>
-      {dot && <span className="h-1.5 w-1.5 rounded-full bg-current" />}
-      {variant === "warning" && <span className="h-[5px] w-[5px] rounded-full bg-gold" />}
+      {variant === "warning" ? (
+        <span className="h-[5px] w-[5px] rounded-full bg-gold" />
+      ) : (
+        dot && <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      )}
       {children}
     </div>
   );
