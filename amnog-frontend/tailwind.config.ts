@@ -12,6 +12,7 @@ const config: Config = {
         "ink-muted": "#94a3b8",
         gold: {
           DEFAULT: "#e8b84b",
+          dark: "#1a1206",
           50: "#FDF8E8",
           100: "#FAF0D1",
           200: "#F5E1A3",

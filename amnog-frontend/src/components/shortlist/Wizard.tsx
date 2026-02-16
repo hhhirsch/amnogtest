@@ -90,7 +90,7 @@ export function Wizard() {
                 i < step
                   ? "border-gold bg-gold/15 text-gold"
                   : i === step
-                    ? "border-gold bg-gold text-[#1a1206] font-semibold shadow-[0_0_0_6px_rgba(232,184,75,0.15),0_4px_16px_rgba(232,184,75,0.3)]"
+                    ? "border-gold bg-gold text-gold-dark font-semibold shadow-[0_0_0_6px_rgba(232,184,75,0.15),0_4px_16px_rgba(232,184,75,0.3)]"
                     : "border-white/20 bg-bg2 text-ink-muted font-medium"
               }`}
             >
