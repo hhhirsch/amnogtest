@@ -10,7 +10,6 @@ const config: Config = {
         ink: {
           DEFAULT: "#e2e8f0",
           muted: "#94a3b8",
-          soft: "#cbd5e1",
         },
         gold: {
           DEFAULT: "#e8b84b",
