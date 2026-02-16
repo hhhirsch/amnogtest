@@ -5,8 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmailGateCard } from "@/components/ui/email-gate-card";
 import { createLead } from "@/lib/api";
-import { Mail } from "lucide-react";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -57,23 +57,11 @@ export default function LeadClient() {
 
   return (
     <section className="flex items-center justify-center min-h-[80vh]">
-      <div className="bg-surface border border-white/[0.13] rounded-[20px] p-8 shadow-[0_24px_64px_rgba(0,0,0,0.5)] relative overflow-hidden max-w-xl w-full">
-        {/* Gold top-line gradient */}
-        <div className="absolute h-0.5 inset-x-0 top-0 bg-gradient-to-r from-transparent via-gold to-transparent opacity-60" />
-        
-        {/* Icon box */}
-        <div className="w-12 h-12 rounded-xl bg-gold/10 border border-gold/25 flex items-center justify-center mb-4">
-          <Mail className="w-6 h-6 text-gold" />
-        </div>
-        
-        {/* Title */}
-        <h1 className="font-serif text-[28px] text-ink leading-snug mb-2">Fast geschafft!</h1>
-        
-        {/* Description */}
-        <p className="text-sm text-ink-soft font-light leading-relaxed mb-6">
-          Hinterlegen Sie Ihre E-Mail-Adresse, um die Ergebnisse aufzurufen und optional als PDF zu exportieren.
-        </p>
-
+      <EmailGateCard
+        title="Fast geschafft!"
+        description="Hinterlegen Sie Ihre E-Mail-Adresse, um die Ergebnisse aufzurufen und optional als PDF zu exportieren."
+        className="max-w-xl w-full"
+      >
         <form className="space-y-3" onSubmit={onSubmit}>
           <Input
             type="email"
@@ -95,7 +83,7 @@ export default function LeadClient() {
             {busy ? "Speichere..." : "Shortlist anzeigen"}
           </Button>
         </form>
-      </div>
+      </EmailGateCard>
     </section>
   );
 }

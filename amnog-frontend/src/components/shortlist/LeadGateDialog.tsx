@@ -4,8 +4,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmailGateCard } from "@/components/ui/email-gate-card";
 import { createLead, downloadPdf } from "@/lib/api";
-import { Mail } from "lucide-react";
 
 export function LeadGateDialog({ runId }: { runId: string }) {
   const [open, setOpen] = useState(false);
@@ -43,23 +43,10 @@ export function LeadGateDialog({ runId }: { runId: string }) {
   }
 
   return (
-    <div className="bg-surface border border-white/[0.13] rounded-[20px] p-8 shadow-[0_24px_64px_rgba(0,0,0,0.5)] relative overflow-hidden">
-      {/* Gold top-line gradient */}
-      <div className="absolute h-0.5 inset-x-0 top-0 bg-gradient-to-r from-transparent via-gold to-transparent opacity-60" />
-      
-      {/* Icon box */}
-      <div className="w-12 h-12 rounded-xl bg-gold/10 border border-gold/25 flex items-center justify-center mb-4">
-        <Mail className="w-6 h-6 text-gold" />
-      </div>
-      
-      {/* Title */}
-      <h3 className="font-serif text-[28px] text-ink leading-snug mb-2">Fast geschafft!</h3>
-      
-      {/* Description */}
-      <p className="text-sm text-ink-soft font-light leading-relaxed mb-6">
-        Bitte geben Sie Ihre E-Mail-Adresse ein, um fortzufahren.
-      </p>
-      
+    <EmailGateCard 
+      title="Fast geschafft!"
+      description="Bitte geben Sie Ihre E-Mail-Adresse ein, um fortzufahren."
+    >
       <div className="space-y-3">
         <Input placeholder="E-Mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         <Input placeholder="Firma (optional)" value={company} onChange={(e) => setCompany(e.target.value)} />
@@ -85,6 +72,6 @@ export function LeadGateDialog({ runId }: { runId: string }) {
           </Button>
         </div>
       </div>
-    </div>
+    </EmailGateCard>
   );
 }
