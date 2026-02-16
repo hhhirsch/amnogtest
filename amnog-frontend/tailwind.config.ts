@@ -6,6 +6,8 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        bg: "#0f172a",
+        ink: "#e2e8f0",
         gold: {
           DEFAULT: "#C9A227",
           50: "#FDF8E8",
@@ -19,6 +21,10 @@ const config: Config = {
           800: "#514110",
           900: "#292108",
         },
+      },
+      fontFamily: {
+        sans: ['"DM Sans"', 'sans-serif'],
+        serif: ['"Instrument Serif"', 'serif'],
       },
     },
   },
