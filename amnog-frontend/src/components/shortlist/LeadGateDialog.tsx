@@ -13,12 +13,23 @@ export function LeadGateDialog({ runId }: { runId: string }) {
   const [company, setCompany] = useState("");
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [consentError, setConsentError] = useState(false);
 
   const onSubmit = async () => {
-    if (!email || !consent) {
-      toast.error("Bitte E-Mail und Consent ausfüllen.");
+    // Reset error state
+    setConsentError(false);
+    
+    if (!email) {
+      toast.error("Bitte E-Mail ausfüllen.");
       return;
     }
+    
+    if (!consent) {
+      setConsentError(true);
+      toast.error("Bitte stimmen Sie der Verarbeitung zu.");
+      return;
+    }
+    
     setBusy(true);
     try {
       await createLead(runId, email, company || undefined);
@@ -50,15 +61,30 @@ export function LeadGateDialog({ runId }: { runId: string }) {
       <div className="space-y-3">
         <Input placeholder="E-Mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         <Input placeholder="Firma (optional)" value={company} onChange={(e) => setCompany(e.target.value)} />
-        <label className="flex items-center gap-2 text-sm text-ink-soft">
-          <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-          Ich stimme der Kontaktaufnahme zu.
-        </label>
+        <div>
+          <label className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={consent} 
+              onChange={(e) => {
+                setConsent(e.target.checked);
+                setConsentError(false);
+              }}
+              className="mt-0.5 cursor-pointer accent-gold"
+            />
+            <span>Ich willige ein, dass meine Angaben zur Kontaktaufnahme verarbeitet werden.</span>
+          </label>
+          {consentError && (
+            <p className="text-xs text-red-400 mt-1.5 ml-6">
+              Bitte stimmen Sie der Verarbeitung zu.
+            </p>
+          )}
+        </div>
         <div className="flex flex-col gap-2 pt-2">
           <Button 
             onClick={onSubmit} 
-            disabled={busy}
-            className="w-full rounded-[10px] py-3.5 bg-gold hover:bg-gold/90 text-slate-900 font-medium"
+            disabled={busy || !consent}
+            className="w-full rounded-[10px] py-3.5 bg-gold hover:bg-gold/90 text-slate-900 font-medium disabled:opacity-50"
           >
             {busy ? "Lädt..." : "Shortlist anzeigen"}
           </Button>
