@@ -120,7 +120,7 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">
           RANKED NACH SUPPORT SCORE
         </h2>
-        <div className="space-y-4">
+        <div>
           {data.candidates.map((candidate) => (
             <CandidateCard key={`${candidate.rank}-${candidate.candidate_text}`} candidate={candidate} />
           ))}

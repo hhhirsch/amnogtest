@@ -7,7 +7,8 @@ const config: Config = {
     extend: {
       colors: {
         bg: "#0f172a",
-        surface: "#0f172a",
+        "bg-surface": "#1e293b",
+        bg2: "#0f1729",
         ink: "#e2e8f0",
         "ink-muted": "#94a3b8",
         surface: "#1e293b",
