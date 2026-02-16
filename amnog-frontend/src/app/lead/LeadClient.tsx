@@ -4,8 +4,8 @@ import { FormEvent, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmailGateCard } from "@/components/ui/email-gate-card";
 import { createLead } from "@/lib/api";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -56,13 +56,12 @@ export default function LeadClient() {
   };
 
   return (
-    <section>
-      <Card className="mx-auto max-w-xl space-y-4">
-        <h1 className="text-2xl font-semibold text-white">Fast geschafft!</h1>
-        <p className="text-sm text-slate-400">
-          Hinterlegen Sie Ihre E-Mail-Adresse, um die Ergebnisse aufzurufen und optional als PDF zu exportieren.
-        </p>
-
+    <section className="flex items-center justify-center min-h-[80vh]">
+      <EmailGateCard
+        title="Fast geschafft!"
+        description="Hinterlegen Sie Ihre E-Mail-Adresse, um die Ergebnisse aufzurufen und optional als PDF zu exportieren."
+        className="max-w-xl w-full"
+      >
         <form className="space-y-3" onSubmit={onSubmit}>
           <Input
             type="email"
@@ -76,7 +75,11 @@ export default function LeadClient() {
             onChange={(event) => setCompany(event.target.value)}
             placeholder="Firma (optional)"
           />
-          <Button type="submit" disabled={busy || !emailIsValid}>
+          <Button 
+            type="submit" 
+            disabled={busy || !emailIsValid}
+            className="w-full rounded-[10px] py-3.5 bg-gold hover:bg-gold/90 text-slate-900 font-medium"
+          >
             {busy ? "Speichere..." : "Shortlist anzeigen"}
           </Button>
         </form>

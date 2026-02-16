@@ -1,6 +1,9 @@
 __pycache__/
 *.pyc
 
+# Database
+data/app.db
+
 # Next.js
 amnog-frontend/node_modules/
 amnog-frontend/.next/
