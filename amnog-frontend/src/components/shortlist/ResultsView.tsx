@@ -12,8 +12,8 @@ import { downloadPdf } from "@/lib/api";
 import { CandidateCard } from "./CandidateCard";
 
 // Map ambiguity values to Eindeutigkeit (inverted)
-const mapAmbiguityToEindeutigkeit = (ambiguity: "hoch" | "mittel" | "niedrig"): string => {
-  const mapping = {
+const mapAmbiguityToEindeutigkeit = (ambiguity: "hoch" | "mittel" | "niedrig"): "hoch" | "mittel" | "niedrig" => {
+  const mapping: Record<"hoch" | "mittel" | "niedrig", "hoch" | "mittel" | "niedrig"> = {
     niedrig: "hoch",
     mittel: "mittel",
     hoch: "niedrig",
@@ -129,8 +129,13 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
               <Info 
                 className="h-3.5 w-3.5 text-ink-muted cursor-help" 
                 tabIndex={0}
-                role="button"
                 aria-label="Erklärung zur Eindeutigkeit"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.focus();
+                  }
+                }}
               />
               <div 
                 className="absolute left-0 top-6 z-50 hidden group-hover:block group-focus-within:block w-64 rounded-lg bg-surface border border-white/[0.13] p-3 shadow-lg"
