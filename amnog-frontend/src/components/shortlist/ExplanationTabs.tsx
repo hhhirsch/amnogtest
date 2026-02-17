@@ -51,8 +51,8 @@ export function ExplanationTabs() {
           <div className="space-y-3">
             <h2 className="text-xl font-semibold text-white">{SCORING_EXPLANATION_TITLE}</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-slate-400">
-              {SCORING_EXPLANATION_BULLETS.map((bullet) => (
-                <li key={bullet}>{bullet}</li>
+              {SCORING_EXPLANATION_BULLETS.map((bullet, index) => (
+                <li key={`bullet-${index}`}>{bullet}</li>
               ))}
             </ul>
           </div>
@@ -62,8 +62,8 @@ export function ExplanationTabs() {
           <div className="space-y-3">
             <h2 className="text-xl font-semibold text-white">Glossar</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-slate-400">
-              {SCORING_GLOSSARY.map((item) => (
-                <li key={item}>{item}</li>
+              {SCORING_GLOSSARY.map((item, index) => (
+                <li key={`glossary-${index}`}>{item}</li>
               ))}
             </ul>
           </div>
