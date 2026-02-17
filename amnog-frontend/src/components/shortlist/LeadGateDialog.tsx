@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmailGateCard } from "@/components/ui/email-gate-card";
+import { PrivacyPolicyModal } from "@/components/ui/privacy-policy";
 import { createLead, downloadPdf } from "@/lib/api";
 
 export function LeadGateDialog({ runId }: { runId: string }) {
@@ -84,7 +85,7 @@ export function LeadGateDialog({ runId }: { runId: string }) {
           )}
           <p className="text-xs text-slate-400 opacity-70 mt-2 ml-6 leading-relaxed">
             Ich verarbeite deine E-Mail-Adresse (Pflichtangabe) und optional den Firmennamen zur Bearbeitung 
-            deiner Anfrage und zur Kontaktaufnahme. Details findest du in der Datenschutzerklärung.
+            deiner Anfrage und zur Kontaktaufnahme. Details findest du in der <PrivacyPolicyModal />.
           </p>
         </div>
         <div className="flex flex-col gap-2 pt-2">
