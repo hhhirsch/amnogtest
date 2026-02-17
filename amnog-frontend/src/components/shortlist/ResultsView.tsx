@@ -126,8 +126,16 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
           <div className="flex items-center gap-1.5">
             <Badge variant="gold">Eindeutigkeit: {mapAmbiguityToEindeutigkeit(data.ambiguity)}</Badge>
             <div className="group relative">
-              <Info className="h-3.5 w-3.5 text-ink-muted cursor-help" />
-              <div className="absolute left-0 top-6 z-50 hidden group-hover:block w-64 rounded-lg bg-surface border border-white/[0.13] p-3 shadow-lg">
+              <Info 
+                className="h-3.5 w-3.5 text-ink-muted cursor-help" 
+                tabIndex={0}
+                role="button"
+                aria-label="Erklärung zur Eindeutigkeit"
+              />
+              <div 
+                className="absolute left-0 top-6 z-50 hidden group-hover:block group-focus-within:block w-64 rounded-lg bg-surface border border-white/[0.13] p-3 shadow-lg"
+                role="tooltip"
+              >
                 <p className="text-xs text-ink-soft leading-relaxed">
                   Misst, wie stark sich der Top-Kandidat vom Rest absetzt. Hoch = klarer Favorit, niedrig = mehrere ähnlich plausible Optionen.
                 </p>
