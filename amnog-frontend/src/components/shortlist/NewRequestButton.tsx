@@ -19,8 +19,12 @@ export function NewRequestButton({ variant = "full", className = "" }: NewReques
       localStorage.removeItem(STORAGE_KEY);
     }
     
-    // Navigate to home page (wizard step 1)
-    router.push("/");
+    // If already on home page, force reload; otherwise navigate
+    if (typeof window !== "undefined" && window.location.pathname === "/") {
+      window.location.reload();
+    } else {
+      router.push("/");
+    }
   };
 
   if (variant === "ghost") {
