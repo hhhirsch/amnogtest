@@ -9,6 +9,7 @@ import type { ShortlistResponse } from "@/lib/types";
 import { downloadPdf } from "@/lib/api";
 
 import { CandidateCard } from "./CandidateCard";
+import { NewRequestButton } from "./NewRequestButton";
 
 export function ResultsView({ data }: { data: ShortlistResponse }) {
   const [busyPdf, setBusyPdf] = useState(false);
@@ -69,7 +70,7 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
       </header>
 
       <div className="space-y-2 mt-3">
-        {/* First row: PDF Download + Contact */}
+        {/* First row: PDF Download + Contact + New Request */}
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleDownloadPdf}
@@ -86,6 +87,7 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
             <Mail className="h-4 w-4" />
             Kontakt aufnehmen
           </button>
+          <NewRequestButton variant="ghost" />
         </div>
         {/* Second row: Ambiguity + Candidates */}
         <div className="flex flex-wrap items-center gap-2">

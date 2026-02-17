@@ -44,7 +44,7 @@ function FullExplanation() {
           <li key={bullet}>{bullet}</li>
         ))}
       </ul>
-      <p className="text-sm text-slate-400">{SCORING_RELATIVE_NOTE}</p>
+      {SCORING_RELATIVE_NOTE && <p className="text-sm text-slate-400">{SCORING_RELATIVE_NOTE}</p>}
       <div>
         <h3 className="text-sm font-semibold text-slate-200">Glossar</h3>
         <ul className="list-disc space-y-1 pl-5 text-sm text-slate-400">
