@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Download, Users, Mail, RefreshCw, Info } from "lucide-react";
+import { Download, Mail, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { ShortlistResponse } from "@/lib/types";
@@ -121,40 +121,10 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
           Neue Anfrage
         </button>
         
-        {/* Third row: Eindeutigkeit + Candidates */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <Badge variant="gold">Eindeutigkeit: {mapAmbiguityToEindeutigkeit(data.ambiguity)}</Badge>
-            <div className="group relative">
-              <Info 
-                className="h-3.5 w-3.5 text-ink-muted cursor-help" 
-                tabIndex={0}
-                aria-label="Erklärung zur Eindeutigkeit"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.currentTarget.focus();
-                  }
-                }}
-              />
-              <div 
-                className="absolute left-0 top-6 z-50 hidden group-hover:block group-focus-within:block w-64 rounded-lg bg-surface border border-white/[0.13] p-3 shadow-lg"
-                role="tooltip"
-              >
-                <p className="text-xs text-ink-soft leading-relaxed">
-                  Misst, wie stark sich der Top-Kandidat vom Rest absetzt. Hoch = klarer Favorit, niedrig = mehrere ähnlich plausible Optionen.
-                </p>
-              </div>
-            </div>
-          </div>
-          <Badge>
-            <Users className="h-3 w-3" />
-            {data.candidates.length} Kandidaten
-          </Badge>
-        </div>
+
       </div>
 
-      <div className="grid grid-cols-3">
+      <div className="grid grid-cols-4">
         <div className="rounded-l-xl border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
           <span className="block font-serif text-[24px] leading-none text-gold">{data.candidates.length}</span>
           <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Kandidaten</span>
@@ -165,11 +135,17 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
           </span>
           <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Top-Score</span>
         </div>
-        <div className="rounded-r-xl border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
+        <div className="border-t border-b border-white/[0.13] bg-surface px-3 py-3.5 text-center">
           <span className="block font-serif text-[24px] leading-none text-gold">
             {data.candidates.reduce((sum, c) => sum + c.support_cases, 0)}
           </span>
           <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">G-BA-Fälle</span>
+        </div>
+        <div className="rounded-r-xl border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
+          <span className="block font-serif text-[24px] leading-none text-gold">
+            {mapAmbiguityToEindeutigkeit(data.ambiguity)}
+          </span>
+          <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Eindeutigkeit</span>
         </div>
       </div>
 

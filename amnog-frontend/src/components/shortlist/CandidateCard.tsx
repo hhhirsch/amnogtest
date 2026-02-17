@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
 import type { CandidateResult } from "@/lib/types";
 
 export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
@@ -51,15 +50,6 @@ export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
             <span className="text-[11px] font-medium text-gold min-w-[28px] text-right">
               {candidate.support_score.toFixed(2)}
             </span>
-          </div>
-
-          {/* Support Score Progress Bar */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">Support Score</span>
-              <span className="font-semibold text-white">{candidate.support_score.toFixed(2)}</span>
-            </div>
-            <Progress value={candidate.support_score} max={1} />
           </div>
 
           <div className="text-sm text-slate-400">Fälle: {candidate.support_cases}</div>
