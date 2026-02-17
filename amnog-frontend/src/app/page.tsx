@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { ScoringExplanationCard } from "@/components/shortlist/ScoringExplanationCard";
 import { Wizard } from "@/components/shortlist/Wizard";
 
@@ -8,11 +9,9 @@ export default function Home() {
   return (
     <div className="space-y-8">
       <section className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-gold-500">—— AMNOG-VERFAHREN</p>
-        <h1 className="text-4xl font-bold tracking-tight text-white">
-          zVT <span className="italic">Navigator</span>
-        </h1>
-        <p className="max-w-4xl text-sm leading-6 text-slate-400">{INTRO_TEXT}</p>
+        <p className="text-[9px] font-semibold uppercase tracking-wider text-gold-500">—— AMNOG-VERFAHREN</p>
+        <Image src="/logo.svg" alt="zVT Navigator" width={200} height={64} className="h-16 w-auto" />
+        <p className="max-w-4xl text-sm leading-6 text-slate-400 pt-2">{INTRO_TEXT}</p>
       </section>
 
       <section>

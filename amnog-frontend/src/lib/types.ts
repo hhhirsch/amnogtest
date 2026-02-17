@@ -16,7 +16,7 @@ export const THERAPY_AREAS = [
 ] as const;
 
 export const SETTINGS = ["ambulant", "stationär", "beides", "unklar"] as const;
-export const ROLES = ["replacement", "add-on", "unklar"] as const;
+export const ROLES = ["replacement", "add-on", "monotherapy", "unklar"] as const;
 export const LINES = ["1L", "2L", "später", "switch", "unklar"] as const;
 export const COMPARATOR_TYPES = ["aktiv", "placebo", "BSC", "physician's choice", "unklar"] as const;
 

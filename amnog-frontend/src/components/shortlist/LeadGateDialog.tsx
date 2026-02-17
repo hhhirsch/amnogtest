@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmailGateCard } from "@/components/ui/email-gate-card";
-import { PrivacyPolicyModal } from "@/components/ui/privacy-policy";
 import { createLead, downloadPdf } from "@/lib/api";
 
 export function LeadGateDialog({ runId }: { runId: string }) {
@@ -59,14 +58,6 @@ export function LeadGateDialog({ runId }: { runId: string }) {
       title="Fast geschafft!"
       description="Bitte geben Sie Ihre E-Mail-Adresse ein, um fortzufahren."
     >
-      <div className="mb-4 p-3 bg-slate-800/50 border border-white/[0.08] rounded-lg">
-        <p className="text-xs text-slate-300 leading-relaxed">
-          <strong>Datenschutzhinweis:</strong> Ich verarbeite deine E-Mail-Adresse (Pflichtangabe) und optional 
-          den Firmennamen zur Bearbeitung deiner Anfrage und zur Kontaktaufnahme. Details findest du in der{" "}
-          <PrivacyPolicyModal />.
-        </p>
-      </div>
-
       <div className="space-y-3">
         <Input placeholder="E-Mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         <Input placeholder="Firma (optional)" value={company} onChange={(e) => setCompany(e.target.value)} />
@@ -82,7 +73,7 @@ export function LeadGateDialog({ runId }: { runId: string }) {
               className="mt-0.5 cursor-pointer accent-gold"
             />
             <span>
-              Ich habe die <PrivacyPolicyModal /> gelesen und bin mit der Verarbeitung meiner Angaben 
+              Ich habe die Datenschutzerklärung gelesen und bin mit der Verarbeitung meiner Angaben 
               zur Kontaktaufnahme einverstanden.
             </span>
           </label>
@@ -91,6 +82,10 @@ export function LeadGateDialog({ runId }: { runId: string }) {
               Bitte stimmen Sie der Datenschutzerklärung zu.
             </p>
           )}
+          <p className="text-xs text-slate-400 opacity-70 mt-2 ml-6 leading-relaxed">
+            Ich verarbeite deine E-Mail-Adresse (Pflichtangabe) und optional den Firmennamen zur Bearbeitung 
+            deiner Anfrage und zur Kontaktaufnahme. Details findest du in der Datenschutzerklärung.
+          </p>
         </div>
         <div className="flex flex-col gap-2 pt-2">
           <Button 
