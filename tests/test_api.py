@@ -1,7 +1,10 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.store import init_db
 
+# Initialize database once for all tests
+init_db()
 
 client = TestClient(app)
 
@@ -43,3 +46,18 @@ def test_lead_requires_consent() -> None:
         json={"run_id": run_id, "email": "user@example.com", "consent": False},
     )
     assert lead_response.status_code == 400
+
+
+def test_shortlist_accepts_monotherapy_role() -> None:
+    """Test that role='monotherapy' is accepted without 422 validation error."""
+    payload = {
+        "therapy_area": "Onkologie",
+        "indication_text": "Erwachsene mit metastasiertem Brustkrebs.",
+        "setting": "ambulant",
+        "role": "monotherapy",
+    }
+    response = client.post("/api/shortlist", json=payload)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    body = response.json()
+    assert "candidates" in body
+    assert len(body["candidates"]) <= 5
