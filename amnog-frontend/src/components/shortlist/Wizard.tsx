@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronRight } from "lucide-react";
@@ -28,6 +28,12 @@ export function Wizard({ onStepChange }: { onStepChange?: (step: number) => void
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [values, setValues] = useState<Partial<ShortlistRequestInput>>(() => loadDraft());
+
+  // Notify parent of initial step
+  useEffect(() => {
+    onStepChange?.(step);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const steps = useMemo(
     () => [
