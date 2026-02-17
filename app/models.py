@@ -36,8 +36,8 @@ class Setting(str, Enum):
 class TherapyRole(str, Enum):
     REPLACEMENT = "replacement"
     ADD_ON = "add-on"
+    MONOTHERAPY = "monotherapy"
     UNKLAR = "unklar"
-
 
 class TherapyLine(str, Enum):
     L1 = "1L"
