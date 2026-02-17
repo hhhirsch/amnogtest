@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Download, Mail, RefreshCw } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import type { ShortlistResponse } from "@/lib/types";
 import { downloadPdf } from "@/lib/api";
 
