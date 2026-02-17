@@ -1,17 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Download, Users, Mail } from "lucide-react";
+import { Download, Users, Mail, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { ShortlistResponse } from "@/lib/types";
 import { downloadPdf } from "@/lib/api";
 
 import { CandidateCard } from "./CandidateCard";
-import { NewRequestButton } from "./NewRequestButton";
+
+const STORAGE_KEY = "amnog-shortlist-draft";
 
 export function ResultsView({ data }: { data: ShortlistResponse }) {
+  const router = useRouter();
   const [busyPdf, setBusyPdf] = useState(false);
 
   const handleDownloadPdf = async () => {
@@ -48,6 +51,16 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
     window.location.href = `mailto:hirsch.hans92@gmail.com?subject=${subject}&body=${body}`;
   };
 
+  const handleNewRequest = () => {
+    if (typeof window === "undefined") return;
+    
+    // Clear wizard draft from localStorage
+    localStorage.removeItem(STORAGE_KEY);
+    
+    // Navigate to home
+    router.push("/");
+  };
+
   return (
     <section className="space-y-6">
       <header 
@@ -69,27 +82,36 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
         </div>
       </header>
 
-      <div className="space-y-2 mt-3">
-        {/* First row: PDF Download + Contact + New Request */}
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="space-y-3 mt-3">
+        {/* First row: PDF Download + Contact (two equal gold buttons) */}
+        <div className="flex items-center gap-3">
           <button
             onClick={handleDownloadPdf}
             disabled={busyPdf}
-            className="inline-flex items-center gap-1.5 bg-gold text-gold-dark text-[11px] font-semibold rounded-lg px-3.5 py-1.5 hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 bg-gold text-gold-dark text-[11px] font-semibold rounded-lg px-3.5 py-1.5 hover:bg-gold-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="h-4 w-4" />
             {busyPdf ? "Lade PDF..." : "PDF downloaden"}
           </button>
           <button
             onClick={handleContactClick}
-            className="inline-flex items-center gap-1.5 bg-gold text-gold-dark text-[11px] font-semibold rounded-lg px-3.5 py-1.5 hover:bg-gold-hover transition-colors"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 bg-gold text-gold-dark text-[11px] font-semibold rounded-lg px-3.5 py-1.5 hover:bg-gold-hover transition-colors"
           >
             <Mail className="h-4 w-4" />
             Kontakt aufnehmen
           </button>
-          <NewRequestButton variant="ghost" />
         </div>
-        {/* Second row: Ambiguity + Candidates */}
+        
+        {/* Second row: Neue Anfrage (full-width ghost button) */}
+        <button
+          onClick={handleNewRequest}
+          className="w-full inline-flex items-center justify-center gap-2 bg-transparent border border-white/[0.12] rounded-[10px] text-[rgba(240,242,247,0.5)] text-sm font-['DM_Sans'] px-[13px] py-[13px] hover:bg-white/5 transition-colors"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Neue Anfrage
+        </button>
+        
+        {/* Third row: Ambiguity + Candidates */}
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="gold">Ambiguity: {data.ambiguity}</Badge>
           <Badge>
