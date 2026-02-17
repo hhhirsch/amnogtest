@@ -38,7 +38,7 @@ PDF_SCORING_EXPLANATION_LINES = [
     "Support ist die Evidenzstärke aus ähnlichen, aktuellen und passenden G-BA-Beschlüssen.",
     "Höherer Support bedeutet: mehr und/oder passendere Evidenz in vergleichbaren Fällen.",
     "Fälle ist die Zahl unterschiedlicher Entscheidungen (decision_id), die einen Kandidaten stützen.",
-    "Confidence (hoch/mittel/niedrig) leitet sich aus Support und Anzahl der Fälle ab.",
+    "Confidence (hoch/mittel/niedrig) leitet sich aus relativem Support (innerhalb dieser Anfrage) und Anzahl der Fälle ab.",
     "Ambiguity beschreibt, wie nah die Scores der Top-Kandidaten beieinander liegen.",
     "Hohe Ambiguity bedeutet: mehrere Optionen sind ähnlich plausibel.",
     "Support ist relativ innerhalb dieser Anfrage und keine klinische Empfehlung.",
@@ -246,6 +246,16 @@ def export_pdf(run_id: str):
         s = re.sub(r"_+", "_", s).strip("_")
         return s or "Export"
 
+    def pretty_role(v: str) -> str:
+        mapping = {
+            "add-on": "Add-on",
+            "replacement": "Replacement",
+            "monotherapy": "Monotherapie",
+            "unklar": "unklar",
+        }
+        vv = (v or "").strip()
+        return mapping.get(vv, vv)
+
     def url_display(url: str, max_len: int = 72) -> str:
         """
         Display-only (NOT clickable): remove scheme and insert line breaks only at "/"
@@ -301,7 +311,7 @@ def export_pdf(run_id: str):
         ("Anwendungsgebiet", indication),
         ("Population (optional)", request_payload.get("population_text", "")),
         ("Setting", request_payload.get("setting", "")),
-        ("Rolle", request_payload.get("role", "")),
+        ("Rolle", pretty_role(request_payload.get("role", ""))),
         ("Therapielinie", request_payload.get("line", "")),
         ("Comparator-Typ", request_payload.get("comparator_type", "")),
         ("Comparator Text (optional)", request_payload.get("comparator_text", "")),
