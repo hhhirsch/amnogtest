@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { EmailGateCard } from "@/components/ui/email-gate-card";
 import { PrivacyPolicyModal } from "@/components/ui/privacy-policy";
 import { createLead } from "@/lib/api";
+import { NewRequestButton } from "@/components/shortlist/NewRequestButton";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -119,6 +120,11 @@ export default function LeadClient() {
           >
             {busy ? "Speichere..." : "Shortlist anzeigen"}
           </Button>
+          
+          <div className="text-center">
+            <p className="text-xs text-slate-400 mb-2">oder</p>
+            <NewRequestButton variant="ghost" className="w-full justify-center" />
+          </div>
         </form>
       </EmailGateCard>
     </section>

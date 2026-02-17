@@ -11,6 +11,7 @@ import { ShortlistRequestSchema, type ShortlistRequestInput } from "@/lib/valida
 import { StepContext } from "./StepContext";
 import { StepIndication } from "./StepIndication";
 import { StepTherapyArea } from "./StepTherapyArea";
+import { NewRequestButton } from "./NewRequestButton";
 
 const STORAGE_KEY = "amnog-shortlist-draft";
 
@@ -130,11 +131,16 @@ export function Wizard() {
       </div>
 
       <div className="space-y-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-gold-500">
-            SCHRITT {step + 1} VON 3
-          </p>
-          <h2 className="mt-1 text-2xl font-bold text-white">Eingaben für Ihre Comparator-Shortlist</h2>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-gold-500">
+              SCHRITT {step + 1} VON 3
+            </p>
+            <h2 className="mt-1 text-2xl font-bold text-white">Eingaben für Ihre Comparator-Shortlist</h2>
+          </div>
+          {(step > 0 || Object.keys(values).length > 0) && (
+            <NewRequestButton variant="ghost" />
+          )}
         </div>
 
         {steps[step]}
