@@ -71,14 +71,6 @@ export default function LeadClient() {
         description="Hinterlegen Sie Ihre E-Mail-Adresse, um die Ergebnisse aufzurufen und optional als PDF zu exportieren."
         className="max-w-xl w-full"
       >
-        <div className="mb-4 p-3 bg-slate-800/50 border border-white/[0.08] rounded-lg">
-          <p className="text-xs text-slate-300 leading-relaxed">
-            <strong>Datenschutzhinweis:</strong> Ich verarbeite deine E-Mail-Adresse (Pflichtangabe) und optional 
-            den Firmennamen zur Bearbeitung deiner Anfrage und zur Kontaktaufnahme. Details findest du in der{" "}
-            <PrivacyPolicyModal />.
-          </p>
-        </div>
-
         <form className="space-y-3" onSubmit={onSubmit}>
           <Input
             type="email"
@@ -105,7 +97,7 @@ export default function LeadClient() {
                 className="mt-0.5 cursor-pointer accent-gold"
               />
               <span>
-                Ich habe die <PrivacyPolicyModal /> gelesen und bin mit der Verarbeitung meiner Angaben 
+                Ich habe die Datenschutzerklärung gelesen und bin mit der Verarbeitung meiner Angaben 
                 zur Kontaktaufnahme einverstanden.
               </span>
             </label>
@@ -114,6 +106,10 @@ export default function LeadClient() {
                 Bitte stimmen Sie der Datenschutzerklärung zu.
               </p>
             )}
+            <p className="text-xs text-slate-400 opacity-70 mt-2 ml-6 leading-relaxed">
+              Ich verarbeite deine E-Mail-Adresse (Pflichtangabe) und optional den Firmennamen zur Bearbeitung 
+              deiner Anfrage und zur Kontaktaufnahme. Details findest du in der <PrivacyPolicyModal />.
+            </p>
           </div>
 
           <Button 
