@@ -18,7 +18,7 @@ const mapAmbiguityToEindeutigkeit = (ambiguity: "hoch" | "mittel" | "niedrig"): 
     mittel: "mittel",
     hoch: "niedrig",
   };
-  return mapping[ambiguity];
+  return mapping[ambiguity] ?? "mittel"; // Fallback to "mittel" for safety
 };
 
 const STORAGE_KEY = "amnog-shortlist-draft";
