@@ -8,7 +8,7 @@ export const SCORING_EXPLANATION_BULLETS = [
   "Support = Evidenzstärke (mehr und/oder passendere Entscheidungen → höher; kleiner Bonus für Breite).",
   "Fälle = Anzahl unterschiedlicher Entscheidungen (decision_id), die den Kandidaten stützen.",
   "Confidence ist relativ innerhalb der Anfrage aus Support (vs. Top-Kandidat) + Fällen abgeleitet.",
-  "Ambiguity zeigt, wie nah die Top-Kandidaten beieinander liegen.",
+  "Eindeutigkeit zeigt, wie klar sich der Top-Kandidat absetzt (hoch = klarer Favorit, niedrig = mehrere ähnlich plausible Optionen).",
   "Hinweis: Support ist keine klinische Empfehlung, sondern eine datenbasierte Näherung aus vorhandenen Beschlüssen.",
 ] as const;
 
@@ -16,7 +16,7 @@ export const SCORING_GLOSSARY = [
   "Support: Evidenzstärke über eindeutige Entscheidungen (inkl. Aktualität & Breite)",
   "Fälle: Anzahl stützender Entscheidungen",
   "Confidence: relatives Label aus Support + Fällen",
-  "Ambiguity: Nähe der Kandidaten-Scores",
+  "Eindeutigkeit: Trennschärfe der Rangfolge (hoch = großer Abstand, niedrig = Scores nah beieinander)",
 ] as const;
 
 export const SCORING_RELATIVE_NOTE = "";

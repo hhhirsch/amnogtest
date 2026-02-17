@@ -3,13 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Download, Users, Mail, RefreshCw } from "lucide-react";
+import { Download, Users, Mail, RefreshCw, Info } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { ShortlistResponse } from "@/lib/types";
 import { downloadPdf } from "@/lib/api";
 
 import { CandidateCard } from "./CandidateCard";
+
+// Map ambiguity values to Eindeutigkeit (inverted)
+const mapAmbiguityToEindeutigkeit = (ambiguity: "hoch" | "mittel" | "niedrig"): "hoch" | "mittel" | "niedrig" => {
+  const mapping: Record<"hoch" | "mittel" | "niedrig", "hoch" | "mittel" | "niedrig"> = {
+    niedrig: "hoch",
+    mittel: "mittel",
+    hoch: "niedrig",
+  };
+  return mapping[ambiguity] ?? "mittel"; // Fallback to "mittel" for safety
+};
 
 const STORAGE_KEY = "amnog-shortlist-draft";
 
@@ -111,9 +121,32 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
           Neue Anfrage
         </button>
         
-        {/* Third row: Ambiguity + Candidates */}
+        {/* Third row: Eindeutigkeit + Candidates */}
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="gold">Ambiguity: {data.ambiguity}</Badge>
+          <div className="flex items-center gap-1.5">
+            <Badge variant="gold">Eindeutigkeit: {mapAmbiguityToEindeutigkeit(data.ambiguity)}</Badge>
+            <div className="group relative">
+              <Info 
+                className="h-3.5 w-3.5 text-ink-muted cursor-help" 
+                tabIndex={0}
+                aria-label="Erklärung zur Eindeutigkeit"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.currentTarget.focus();
+                  }
+                }}
+              />
+              <div 
+                className="absolute left-0 top-6 z-50 hidden group-hover:block group-focus-within:block w-64 rounded-lg bg-surface border border-white/[0.13] p-3 shadow-lg"
+                role="tooltip"
+              >
+                <p className="text-xs text-ink-soft leading-relaxed">
+                  Misst, wie stark sich der Top-Kandidat vom Rest absetzt. Hoch = klarer Favorit, niedrig = mehrere ähnlich plausible Optionen.
+                </p>
+              </div>
+            </div>
+          </div>
           <Badge>
             <Users className="h-3 w-3" />
             {data.candidates.length} Kandidaten
