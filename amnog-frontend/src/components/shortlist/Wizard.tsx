@@ -11,7 +11,6 @@ import { ShortlistRequestSchema, type ShortlistRequestInput } from "@/lib/valida
 import { StepContext } from "./StepContext";
 import { StepIndication } from "./StepIndication";
 import { StepTherapyArea } from "./StepTherapyArea";
-import { NewRequestButton } from "./NewRequestButton";
 
 const STORAGE_KEY = "amnog-shortlist-draft";
 
@@ -24,7 +23,7 @@ function loadDraft(): Partial<ShortlistRequestInput> {
   }
 }
 
-export function Wizard() {
+export function Wizard({ onStepChange }: { onStepChange?: (step: number) => void }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -59,6 +58,7 @@ export function Wizard() {
     const next = Math.min(step + 1, steps.length - 1);
     setStep(next);
     persist(values);
+    onStepChange?.(next);
   };
 
   const onSubmit = async () => {
@@ -131,16 +131,11 @@ export function Wizard() {
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-gold-500">
-              SCHRITT {step + 1} VON 3
-            </p>
-            <h2 className="mt-1 text-2xl font-bold text-white">Eingaben für Ihre Comparator-Shortlist</h2>
-          </div>
-          {(step > 0 || Object.keys(values).length > 0) && (
-            <NewRequestButton variant="ghost" />
-          )}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-gold-500">
+            SCHRITT {step + 1} VON 3
+          </p>
+          <h2 className="mt-1 text-2xl font-bold text-white">Eingaben für Ihre Comparator-Shortlist</h2>
         </div>
 
         {steps[step]}
