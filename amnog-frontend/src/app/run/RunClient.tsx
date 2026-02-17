@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ResultsView } from "@/components/shortlist/ResultsView";
-import { ScoringExplanationCard } from "@/components/shortlist/ScoringExplanationCard";
+import { ExplanationTabs } from "@/components/shortlist/ExplanationTabs";
 import { Card } from "@/components/ui/card";
 import { getRun } from "@/lib/api";
 import type { RunResponse } from "@/lib/types";
@@ -69,15 +69,7 @@ export default function RunClient() {
   return (
     <div className="space-y-6">
       <ResultsView data={data.response_payload} />
-
-      <details className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-white">
-          Wie die Shortlist entsteht
-        </summary>
-        <div className="mt-3">
-          <ScoringExplanationCard compact />
-        </div>
-      </details>
+      <ExplanationTabs />
     </div>
   );
 }
