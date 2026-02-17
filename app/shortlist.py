@@ -2,22 +2,143 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
+from typing import Mapping, Optional
 
 from app.domain import CandidateResult, ReferenceItem, ShortlistRequest
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "patient_groups.json"
+
+# Tokenization / preprocessing
 WORD_RE = re.compile(r"[A-Za-zÄÖÜäöüß0-9]+")
-_PAREN_ABBR_RE = re.compile(r"\((?:\s*[A-Za-z]{2,6}\s*)\)")
+_BSC_RE = re.compile(r"\bb\s*\.?\s*s\s*\.?\s*c\b", flags=re.IGNORECASE)
 _WS_RE = re.compile(r"\s+")
+_PAREN_ABBR_RE = re.compile(r"\((?:\s*[A-Za-z]{2,6}\s*)\)")  # used in normalize_candidate only
+
+# Detect combination therapies in zVT text (avoid HER2+ false positives by requiring spaces around "+")
+_COMBO_PLUS_RE = re.compile(r"\s\+\s")
+_PLUS_WORD_RE = re.compile(r"\bplus\b", flags=re.IGNORECASE)
+
+# ---- Scoring knobs (tweakable via env) ----
+# overlap  -> legacy overlap (but with improved tokenization)
+# tfidf    -> smoothed TF-IDF sum
+# bm25     -> BM25 (recommended)
+SCORING_MODE = (os.getenv("SCORING_MODE", "bm25") or "bm25").strip().lower()
+if SCORING_MODE not in {"overlap", "tfidf", "bm25"}:
+    SCORING_MODE = "bm25"
+
+# If a therapy area has fewer than MIN_PRIMARY_RECORDS, we consider a soft fallback to other areas.
+MIN_PRIMARY_RECORDS = int(os.getenv("MIN_PRIMARY_RECORDS", "10"))
+OTHER_AREA_PENALTY = float(os.getenv("OTHER_AREA_PENALTY", "0.7"))
+RETRIEVE_LIMIT = int(os.getenv("RETRIEVE_LIMIT", "50"))
+
+# Field weights for lexical scoring (AWG is primary; population secondary; zVT as boost)
+W_AWG = float(os.getenv("W_AWG", "1.0"))
+W_POP = float(os.getenv("W_POP", "0.6"))
+W_ZVT = float(os.getenv("W_ZVT", "0.3"))
+
+# BM25 parameters
+BM25_K1 = float(os.getenv("BM25_K1", "1.2"))
+BM25_B = float(os.getenv("BM25_B", "0.75"))
+
+# Stopwords: keep this deliberately small + obvious; TF-IDF/BM25 handle frequent domain terms.
+STOPWORDS: set[str] = {
+    "mit",
+    "und",
+    "die",
+    "der",
+    "des",
+    "den",
+    "dem",
+    "das",
+    "in",
+    "im",
+    "an",
+    "auf",
+    "bei",
+    "von",
+    "zu",
+    "zur",
+    "zum",
+    "oder",
+    "sowie",
+    "als",
+    "nach",
+    "für",
+    "eine",
+    "einer",
+    "einem",
+    "einen",
+    "ein",
+    "ist",
+    "sind",
+    "wird",
+    "werden",
+    "nicht",
+    "kein",
+    "keine",
+    "ohne",
+    "über",
+    "unter",
+    "dass",
+    "da",
+    "nur",
+    "auch",
+    "wie",
+    "mehr",
+    "weniger",
+}
+
+# Keep a few short but semantically relevant tokens (otherwise we drop <=2 chars)
+KEEP_SHORT_TOKENS = {"1l", "2l", "3l", "4l", "5l", "l1", "l2", "l3", "l4", "l5"}
 
 
-@dataclass
+def _normalize_for_tokens(text: str) -> str:
+    """Lightweight normalization to improve lexical matching.
+
+    Keep it intentionally conservative (no aggressive stemming) to avoid false positives.
+    """
+    cleaned = (text or "").strip().lower()
+    if not cleaned:
+        return ""
+
+    cleaned = _WS_RE.sub(" ", cleaned)
+
+    # Normalize common comparator phrases/abbreviations so query and corpus meet in the middle.
+    cleaned = cleaned.replace("best supportive care", "bsc")
+    cleaned = cleaned.replace("best supportive-care", "bsc")
+    cleaned = _BSC_RE.sub("bsc", cleaned)
+
+    cleaned = cleaned.replace("patientenindividuelle therapie", "pit")
+    cleaned = cleaned.replace("beobachtendes abwarten", "watchful waiting")
+
+    cleaned = cleaned.replace("nach ärztlicher maßgabe", "nach arztlicher maßgabe")
+    cleaned = cleaned.replace("nach maßgabe des arztes", "nach arztlicher maßgabe")
+    cleaned = cleaned.replace("nach maßgabe des arzt", "nach arztlicher maßgabe")
+    cleaned = cleaned.replace("ärztlicher maßgabe", "arztlicher maßgabe")
+
+    return cleaned
+
+
+def tokenize(text: str) -> list[str]:
+    raw = [t.lower() for t in WORD_RE.findall(_normalize_for_tokens(text))]
+    tokens: list[str] = []
+    for tok in raw:
+        if tok in STOPWORDS:
+            continue
+        if len(tok) <= 2 and tok not in KEEP_SHORT_TOKENS:
+            continue
+        tokens.append(tok)
+    return tokens
+
+
+@dataclass(frozen=True)
 class PatientGroupRecord:
     patient_group_id: str
     decision_id: str
@@ -29,6 +150,30 @@ class PatientGroupRecord:
     patient_group_text: str
     zvt_text: str
 
+    def __post_init__(self) -> None:
+        # Cache tokenized fields once at load time to avoid re-tokenizing on every request.
+        # Note: These are stored as private attributes (not dataclass fields) to keep hashing stable.
+        awg_tokens = tuple(tokenize(self.awg_text or ""))
+        pop_tokens = tuple(tokenize(self.patient_group_text or ""))
+        zvt_tokens = tuple(tokenize(self.zvt_text or ""))
+
+        terms = set(awg_tokens)
+        terms.update(pop_tokens)
+        terms.update(zvt_tokens)
+
+        object.__setattr__(self, "_awg_tokens", awg_tokens)
+        object.__setattr__(self, "_pop_tokens", pop_tokens)
+        object.__setattr__(self, "_zvt_tokens", zvt_tokens)
+        object.__setattr__(self, "_terms", frozenset(terms))
+
+
+@dataclass(frozen=True)
+class BM25Stats:
+    idf: dict[str, float]
+    avg_len_awg: float
+    avg_len_pop: float
+    avg_len_zvt: float
+
 
 @lru_cache(maxsize=1)
 def load_records() -> tuple[PatientGroupRecord, ...]:
@@ -36,17 +181,186 @@ def load_records() -> tuple[PatientGroupRecord, ...]:
     return tuple(PatientGroupRecord(**row) for row in rows)
 
 
-def tokenize(text: str) -> list[str]:
-    return [t.lower() for t in WORD_RE.findall(text)]
+@lru_cache(maxsize=32)
+def load_records_for_area(area_value: str) -> tuple[PatientGroupRecord, ...]:
+    return tuple(r for r in load_records() if r.therapy_area == area_value)
+
+
+# -----------------------------
+# Scoring: overlap / TF-IDF / BM25
+# -----------------------------
 
 
 def overlap_score(query: str, document: str) -> float:
+    """Legacy overlap score (kept for SCORING_MODE=overlap)."""
     q_tokens = set(tokenize(query))
+    return overlap_score_from_tokens(q_tokens, document)
+
+
+def overlap_score_from_tokens(query_tokens: set[str], document: str) -> float:
+    # Backwards-compatible helper (string document). Prefer overlap_score_from_record for runtime.
     d_tokens = tokenize(document)
-    if not q_tokens or not d_tokens:
+    if not query_tokens or not d_tokens:
         return 0.0
-    hit_count = sum(1 for token in d_tokens if token in q_tokens)
+    hit_count = sum(1 for token in d_tokens if token in query_tokens)
     return hit_count / math.sqrt(len(d_tokens))
+
+
+def overlap_score_from_record(query_tokens: set[str], record: PatientGroupRecord) -> float:
+    if not query_tokens:
+        return 0.0
+
+    dl = len(record._awg_tokens) + len(record._pop_tokens)
+    if dl <= 0:
+        return 0.0
+
+    hit_count = 0
+    for token in record._awg_tokens:
+        if token in query_tokens:
+            hit_count += 1
+    for token in record._pop_tokens:
+        if token in query_tokens:
+            hit_count += 1
+
+    return hit_count / math.sqrt(dl)
+
+
+def build_idf(records: tuple[PatientGroupRecord, ...]) -> dict[str, float]:
+    """Compute smoothed IDF for TF-IDF.
+
+    We keep IDF non-negative via log((N+1)/(df+1)).
+    """
+    N = len(records)
+    if N == 0:
+        return {}
+
+    df: dict[str, int] = defaultdict(int)
+    for r in records:
+        for tok in r._terms:
+            df[tok] += 1
+
+    return {tok: math.log((N + 1) / (count + 1)) for tok, count in df.items()}
+
+
+@lru_cache(maxsize=1)
+def get_global_idf() -> dict[str, float]:
+    return build_idf(load_records())
+
+
+@lru_cache(maxsize=32)
+def get_idf_for_area(area_value: str) -> dict[str, float]:
+    records = load_records_for_area(area_value)
+    if len(records) < MIN_PRIMARY_RECORDS:
+        return get_global_idf()
+    return build_idf(records)
+
+
+def tfidf_score_from_doc_tokens(
+    query_tokens: set[str], doc_tokens: tuple[str, ...], idf: Mapping[str, float]
+) -> float:
+    if not query_tokens or not doc_tokens:
+        return 0.0
+
+    counts = Counter(doc_tokens)
+    doc_len = len(doc_tokens)
+
+    score = 0.0
+    for tok in query_tokens:
+        tf = counts.get(tok, 0) / doc_len
+        if tf:
+            score += tf * idf.get(tok, 0.0)
+    return score
+
+
+def build_bm25_stats(records: tuple[PatientGroupRecord, ...]) -> BM25Stats:
+    """Compute BM25 stats (idf + average field lengths)."""
+    N = len(records)
+    if N == 0:
+        return BM25Stats(idf={}, avg_len_awg=1.0, avg_len_pop=1.0, avg_len_zvt=1.0)
+
+    df: dict[str, int] = defaultdict(int)
+    sum_awg = 0
+    sum_pop = 0
+    sum_zvt = 0
+
+    for r in records:
+        sum_awg += len(r._awg_tokens)
+        sum_pop += len(r._pop_tokens)
+        sum_zvt += len(r._zvt_tokens)
+
+        # Document frequency is tracked per *record* (union of all fields).
+        for tok in r._terms:
+            df[tok] += 1
+
+    # BM25 idf (non-negative): log(1 + (N - df + 0.5)/(df + 0.5))
+    idf = {tok: math.log(1.0 + (N - dfi + 0.5) / (dfi + 0.5)) for tok, dfi in df.items()}
+
+    avg_len_awg = (sum_awg / N) if N else 1.0
+    avg_len_pop = (sum_pop / N) if N else 1.0
+    avg_len_zvt = (sum_zvt / N) if N else 1.0
+
+    # Avoid division-by-zero downstream
+    return BM25Stats(
+        idf=idf,
+        avg_len_awg=max(avg_len_awg, 1.0),
+        avg_len_pop=max(avg_len_pop, 1.0),
+        avg_len_zvt=max(avg_len_zvt, 1.0),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_global_bm25_stats() -> BM25Stats:
+    return build_bm25_stats(load_records())
+
+
+@lru_cache(maxsize=32)
+def get_bm25_stats_for_area(area_value: str) -> BM25Stats:
+    records = load_records_for_area(area_value)
+    if len(records) < MIN_PRIMARY_RECORDS:
+        return get_global_bm25_stats()
+    return build_bm25_stats(records)
+
+
+def bm25_score_from_doc_tokens(
+    query_tokens: set[str], doc_tokens: tuple[str, ...], idf: Mapping[str, float], avgdl: float
+) -> float:
+    if not query_tokens or not doc_tokens:
+        return 0.0
+
+    counts = Counter(doc_tokens)
+    dl = len(doc_tokens)
+    avgdl = avgdl if avgdl > 0 else 1.0
+
+    # BM25 length normalisation
+    denom_const = BM25_K1 * (1.0 - BM25_B + BM25_B * (dl / avgdl))
+
+    score = 0.0
+    for tok in query_tokens:
+        tf = counts.get(tok, 0)
+        if not tf:
+            continue
+        tok_idf = idf.get(tok, 0.0)
+        score += tok_idf * (tf * (BM25_K1 + 1.0)) / (tf + denom_const)
+    return score
+
+
+def score_record_tfidf(query_tokens: set[str], record: PatientGroupRecord, idf: Mapping[str, float]) -> float:
+    awg = tfidf_score_from_doc_tokens(query_tokens, record._awg_tokens, idf)
+    pop = tfidf_score_from_doc_tokens(query_tokens, record._pop_tokens, idf)
+    zvt = tfidf_score_from_doc_tokens(query_tokens, record._zvt_tokens, idf)
+    return awg * W_AWG + pop * W_POP + zvt * W_ZVT
+
+
+def score_record_bm25(query_tokens: set[str], record: PatientGroupRecord, stats: BM25Stats) -> float:
+    awg = bm25_score_from_doc_tokens(query_tokens, record._awg_tokens, stats.idf, stats.avg_len_awg)
+    pop = bm25_score_from_doc_tokens(query_tokens, record._pop_tokens, stats.idf, stats.avg_len_pop)
+    zvt = bm25_score_from_doc_tokens(query_tokens, record._zvt_tokens, stats.idf, stats.avg_len_zvt)
+    return awg * W_AWG + pop * W_POP + zvt * W_ZVT
+
+
+# -----------------------------
+# Business logic helpers
+# -----------------------------
 
 
 def recency_weight(decision_date: str) -> float:
@@ -68,7 +382,7 @@ def normalize_candidate(text: str) -> str:
 
     cleaned = cleaned.replace("best supportive care", "bsc")
     cleaned = cleaned.replace("best supportive-care", "bsc")
-    cleaned = re.sub(r"\bb\s*\.?\s*s\s*\.?\s*c\b", "bsc", cleaned)
+    cleaned = _BSC_RE.sub("bsc", cleaned)
 
     cleaned = cleaned.replace("beobachtendes abwarten", "watchful waiting")
 
@@ -82,10 +396,40 @@ def normalize_candidate(text: str) -> str:
     return cleaned
 
 
-def confidence_label(score: float, support_cases: int) -> str:
-    if score >= 2.5 and support_cases >= 3:
+
+
+def _is_combination_therapy_zvt(zvt_lower: str) -> bool:
+    """Heuristic: does the zVT text describe a combination/add-on regimen?
+
+    We avoid treating biomarker notation like 'HER2+' as combination by requiring spaces around '+'.
+    """
+    t = zvt_lower or ""
+    if not t:
+        return False
+
+    if "kombination" in t or "kombiniert" in t:
+        return True
+    if "zusätzlich" in t or "zusaetzlich" in t:
+        return True
+    if "add-on" in t:
+        return True
+    if "zusammen mit" in t:
+        return True
+    if _COMBO_PLUS_RE.search(t):
+        return True
+    if _PLUS_WORD_RE.search(t):
+        return True
+    return False
+
+def confidence_label(score: float, top_score: float, support_cases: int) -> str:
+    """Confidence is relative to the best candidate in *this* request."""
+    if top_score <= 0:
+        return "niedrig"
+
+    relative = score / top_score
+    if relative >= 0.80 and support_cases >= 3:
         return "hoch"
-    if score >= 1.2 and support_cases >= 2:
+    if relative >= 0.50 and support_cases >= 2:
         return "mittel"
     return "niedrig"
 
@@ -110,69 +454,148 @@ def build_query(payload: ShortlistRequest) -> str:
     return "\n".join(parts)
 
 
+def aggregate_score(best_by_decision: dict[str, float]) -> float:
+    """Aggregate per-decision evidence into a candidate-level support score.
+
+    - We avoid double-counting within a decision by using the best hit per decision.
+    - We lightly reward breadth (more distinct decisions) via a log bonus.
+    """
+    if not best_by_decision:
+        return 0.0
+
+    best_scores = list(best_by_decision.values())
+    base = sum(best_scores)
+
+    coverage_bonus = math.log(1 + len(best_scores)) * 0.15
+    return base * (1 + coverage_bonus)
+
+
 def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str]:
     query = build_query(payload)
-    records = [r for r in load_records() if r.therapy_area == payload.therapy_area.value]
+    query_tokens = set(tokenize(query))
 
-    retrieved: list[tuple[PatientGroupRecord, float]] = []
-    for record in records:
-        document = f"{record.awg_text}\n{record.patient_group_text}"
-        score = overlap_score(query, document)
-        if score > 0:
-            retrieved.append((record, score))
+    area_value = payload.therapy_area.value
+    primary_records = load_records_for_area(area_value)
 
-    retrieved.sort(key=lambda item: item[1], reverse=True)
-    top_retrieved = retrieved[:30]
+    # Therapy-area selection (strict by default; soft fallback if the area corpus is tiny)
+    if len(primary_records) >= MIN_PRIMARY_RECORDS:
+        records_with_penalty = [(r, 1.0) for r in primary_records]
+        use_area_corpus = True
+    else:
+        records_with_penalty = [
+            (r, 1.0 if r.therapy_area == area_value else OTHER_AREA_PENALTY) for r in load_records()
+        ]
+        use_area_corpus = False
+
+    # --- IMPORTANT FIX ---
+    # Only build/consult the caches required for the active SCORING_MODE
+    idf: Optional[Mapping[str, float]] = None
+    bm25_stats: Optional[BM25Stats] = None
+
+    if SCORING_MODE == "tfidf":
+        idf = get_idf_for_area(area_value) if use_area_corpus else get_global_idf()
+    elif SCORING_MODE == "bm25":
+        bm25_stats = get_bm25_stats_for_area(area_value) if use_area_corpus else get_global_bm25_stats()
+
+    # Fail fast: if these are None, we have a logic bug (don't silently return empty results).
+    if SCORING_MODE == "tfidf" and idf is None:
+        raise RuntimeError("idf wurde nicht initialisiert – das sollte nicht passieren")
+    if SCORING_MODE == "bm25" and bm25_stats is None:
+        raise RuntimeError("bm25_stats wurde nicht initialisiert – das sollte nicht passieren")
+
+    retrieved: list[tuple[PatientGroupRecord, float, float]] = []
+    for record, area_penalty in records_with_penalty:
+        if SCORING_MODE == "overlap":
+            base_score = overlap_score_from_record(query_tokens, record)
+        elif SCORING_MODE == "tfidf":
+            base_score = score_record_tfidf(query_tokens, record, idf)  # type: ignore[arg-type]
+        else:  # bm25 (default)
+            base_score = score_record_bm25(query_tokens, record, bm25_stats)  # type: ignore[arg-type]
+
+        # Apply area penalty already for retrieval ordering in fallback mode.
+        retrieval_score = base_score * area_penalty
+        if retrieval_score > 0:
+            retrieved.append((record, base_score, area_penalty))
+
+    retrieved.sort(key=lambda item: item[1] * item[2], reverse=True)
+    top_retrieved = retrieved[:RETRIEVE_LIMIT]
 
     aggregated: dict[str, dict] = defaultdict(
-        lambda: {"text": "", "score": 0.0, "refs": [], "best_by_decision": {}}
+        lambda: {
+            "text": "",
+            "score": 0.0,
+            "refs": [],
+            "best_by_decision": {},
+            "best_display_score": -1.0,
+        }
     )
 
-    for record, sim_score in top_retrieved:
+    for record, base_score, area_penalty in top_retrieved:
         candidate_key = normalize_candidate(record.zvt_text)
+
+        # Contextual nudges (small)
         adj = 1.0
-        zvt_lower = record.zvt_text.lower()
-        if payload.role.value == "add-on" and "kombination" in zvt_lower:
+        zvt_lower = (record.zvt_text or "").lower()
+        is_combo = _is_combination_therapy_zvt(zvt_lower)
+
+        # Role-based hinting
+        if payload.role.value == "add-on" and is_combo:
             adj += 0.1
+        if payload.role.value == "monotherapy":
+            # Monotherapy should prefer non-combination comparators, and down-rank clear combination regimens.
+            adj += 0.05 if not is_combo else -0.1
+
+        # Setting hinting
         if payload.setting.value == "stationär" and any(x in zvt_lower for x in ["infusion", "stationär"]):
             adj += 0.1
+
+        # Uncertainty penalties
         if payload.setting.value == "unklar":
             adj -= 0.1
         if payload.role.value == "unklar":
             adj -= 0.1
 
-        weighted = sim_score * recency_weight(record.decision_date) * adj
+        weighted = base_score * recency_weight(record.decision_date) * adj * area_penalty
+
         entry = aggregated[candidate_key]
-        entry["text"] = record.zvt_text
+
+        # Use the strongest supporting wording as the display text for this candidate.
+        if weighted > entry["best_display_score"]:
+            entry["text"] = record.zvt_text
+            entry["best_display_score"] = weighted
+
         entry["refs"].append(
             ReferenceItem(
                 decision_id=record.decision_id,
                 product_name=record.product_name,
                 decision_date=record.decision_date,
                 url=record.url,
-                snippet=record.patient_group_text[:260],
+                snippet=(record.patient_group_text or "")[:260],
                 score=round(weighted, 4),
             )
         )
+
         prev = entry["best_by_decision"].get(record.decision_id)
         if prev is None or weighted > prev:
             entry["best_by_decision"][record.decision_id] = weighted
 
     for entry in aggregated.values():
-        entry["score"] = sum(entry["best_by_decision"].values())
+        entry["score"] = aggregate_score(entry["best_by_decision"])
 
     ranked = sorted(aggregated.values(), key=lambda e: e["score"], reverse=True)[:5]
+    top_score = ranked[0]["score"] if ranked else 0.0
+
     candidates: list[CandidateResult] = []
     for idx, row in enumerate(ranked, start=1):
         refs = sorted(row["refs"], key=lambda r: r.score, reverse=True)[:5]
         support_cases = len(row["best_by_decision"])
-        score = round(row["score"], 4)
+        score = float(row["score"])
         candidates.append(
             CandidateResult(
                 rank=idx,
                 candidate_text=row["text"],
-                support_score=score,
-                confidence=confidence_label(score, support_cases),
+                support_score=round(score, 4),
+                confidence=confidence_label(score, top_score, support_cases),
                 support_cases=support_cases,
                 references=refs,
             )
@@ -180,3 +603,4 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str]:
 
     ambiguity = ambiguity_label([c.support_score for c in candidates])
     return candidates, ambiguity
+
