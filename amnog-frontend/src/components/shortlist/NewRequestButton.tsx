@@ -14,13 +14,13 @@ export function NewRequestButton({ variant = "full", className = "" }: NewReques
   const router = useRouter();
 
   const handleNewRequest = () => {
+    if (typeof window === "undefined") return;
+    
     // Clear wizard draft from localStorage
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    localStorage.removeItem(STORAGE_KEY);
     
     // If already on home page, force reload; otherwise navigate
-    if (typeof window !== "undefined" && window.location.pathname === "/") {
+    if (window.location.pathname === "/") {
       window.location.reload();
     } else {
       router.push("/");

@@ -10,7 +10,7 @@ export default function Home() {
     <div className="space-y-8">
       <section className="space-y-3">
         <p className="text-[9px] font-semibold uppercase tracking-wider text-gold-500">—— AMNOG-VERFAHREN</p>
-        <Image src="/logozVTnavigator.svg" alt="zVT Navigator" width={200} height={32} className="mt-2 mb-4 w-auto" />
+        <Image src="/logozVTnavigator.svg" alt="zVT Navigator" width={200} height={32} className="mt-2 mb-4" />
         <p className="max-w-4xl text-sm leading-6 text-slate-400 pt-2">{INTRO_TEXT}</p>
       </section>
 
