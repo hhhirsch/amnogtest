@@ -82,7 +82,7 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
         </div>
       </header>
 
-      <div className="space-y-2 mt-3">
+      <div className="space-y-3 mt-3">
         {/* First row: PDF Download + Contact (two equal gold buttons) */}
         <div className="flex items-center gap-3">
           <button
