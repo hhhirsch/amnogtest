@@ -53,6 +53,20 @@ export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
           </div>
 
           <div className="text-sm text-slate-400">Fälle: {candidate.support_cases}</div>
+          
+          {/* Confidence indicator */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-ink-muted">Confidence:</span>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+              candidate.confidence === "hoch" 
+                ? "bg-green-500/20 text-green-400" 
+                : candidate.confidence === "mittel" 
+                ? "bg-yellow-500/20 text-yellow-400" 
+                : "bg-red-500/20 text-red-400"
+            }`}>
+              {candidate.confidence}
+            </span>
+          </div>
 
           {/* Expandable References */}
           <div>

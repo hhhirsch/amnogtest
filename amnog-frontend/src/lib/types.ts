@@ -43,6 +43,10 @@ export type ShortlistResponse = {
   candidates: CandidateResult[];
   ambiguity: "hoch" | "mittel" | "niedrig";
   generated_at: string;
+  notices: string[];
+  status: "ok" | "needs_clarification" | "no_result";
+  reasons: string[];
+  diagnostics?: Record<string, unknown>;
 };
 
 export type RunResponse = {
