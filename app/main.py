@@ -67,7 +67,7 @@ def startup() -> None:
 @app.post("/api/shortlist", response_model=ShortlistResponse)
 def create_shortlist(payload: ShortlistRequest) -> ShortlistResponse:
     domain_req = payload.to_domain()
-    domain_candidates, ambiguity = shortlist(domain_req)
+    domain_candidates, ambiguity, notices = shortlist(domain_req)
 
     run_id = str(uuid4())
     generated_at = datetime.utcnow()
@@ -79,6 +79,7 @@ def create_shortlist(payload: ShortlistRequest) -> ShortlistResponse:
         "candidates": [c.model_dump() for c in candidates],
         "ambiguity": ambiguity,
         "generated_at": generated_at.isoformat(),
+        "notices": notices,
     }
 
     save_run(run_id, payload.model_dump(), response_payload)

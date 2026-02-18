@@ -14,6 +14,9 @@ from typing import Mapping, Optional
 from app.domain import CandidateResult, ReferenceItem, ShortlistRequest
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "patient_groups.json"
+STATS_PATH = Path(__file__).resolve().parent.parent / "data" / "patient_groups_stats.json"
+
+ENABLE_ZVT_NOTICES = os.getenv("ENABLE_ZVT_NOTICES", "0") == "1"
 
 # Tokenization / preprocessing
 WORD_RE = re.compile(r"[A-Za-zÄÖÜäöüß0-9]+")
@@ -178,12 +181,23 @@ class BM25Stats:
 @lru_cache(maxsize=1)
 def load_records() -> tuple[PatientGroupRecord, ...]:
     rows = json.loads(DATA_PATH.read_text(encoding="utf-8"))
-    return tuple(PatientGroupRecord(**row) for row in rows)
+    known_fields = {f.name for f in PatientGroupRecord.__dataclass_fields__.values()}  # type: ignore[attr-defined]
+    return tuple(PatientGroupRecord(**{k: v for k, v in row.items() if k in known_fields}) for row in rows)
 
 
 @lru_cache(maxsize=32)
 def load_records_for_area(area_value: str) -> tuple[PatientGroupRecord, ...]:
     return tuple(r for r in load_records() if r.therapy_area == area_value)
+
+
+@lru_cache(maxsize=1)
+def load_area_stats() -> dict:
+    try:
+        if not STATS_PATH.exists():
+            return {}
+        return json.loads(STATS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
 
 
 # -----------------------------
@@ -470,7 +484,7 @@ def aggregate_score(best_by_decision: dict[str, float]) -> float:
     return base * (1 + coverage_bonus)
 
 
-def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str]:
+def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, list[str]]:
     query = build_query(payload)
     query_tokens = set(tokenize(query))
 
@@ -602,5 +616,25 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str]:
         )
 
     ambiguity = ambiguity_label([c.support_score for c in candidates])
-    return candidates, ambiguity
+
+    notices: list[str] = []
+    if ENABLE_ZVT_NOTICES:
+        area_stats = load_area_stats().get(area_value)
+        if area_stats:
+            total = area_stats.get("total_rows", 0)
+            has_zvt = area_stats.get("has_zvt_rows", 0)
+            orphan_missing = area_stats.get("orphan_missing_zvt_rows", 0)
+            orphan_missing_ratio = orphan_missing / total if total else 0
+            if has_zvt < 15 or orphan_missing_ratio >= 0.50:
+                notices.append(
+                    "Für dieses Therapiegebiet liegen viele Orphan-/Sonderverfahren ohne festgelegte zVT vor. "
+                    "Ergebnisse basieren auf Analogfällen und können fachfremd sein."
+                )
+        if not use_area_corpus:
+            notices.append(
+                "Hinweis: Es wurden ergänzend andere Therapiegebiete berücksichtigt (mit Abschlag), "
+                "weil im gewählten Gebiet zu wenige passende Präzedenzfälle vorlagen."
+            )
+
+    return candidates, ambiguity, notices
 
