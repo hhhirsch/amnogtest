@@ -44,6 +44,10 @@ export type ShortlistResponse = {
   ambiguity: "hoch" | "mittel" | "niedrig";
   generated_at: string;
   notices?: string[];
+  reliability?: "hoch" | "mittel" | "niedrig";
+  reliability_reasons?: string[];
+  status?: "ok" | "needs_clarification" | "no_result";
+  reasons?: string[];
 };
 
 export type RunResponse = {

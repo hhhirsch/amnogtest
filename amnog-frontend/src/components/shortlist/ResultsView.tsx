@@ -70,6 +70,31 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
     router.push("/");
   };
 
+  // Derive status if not explicitly provided
+  const status = data.status || (data.candidates.length === 0 ? "no_result" : "ok");
+  const reliability = data.reliability || "mittel";
+  const reliabilityReasons = data.reliability_reasons || [];
+
+  // Determine header text based on reliability/status
+  const getHeaderText = () => {
+    if (status === "no_result" || reliability === "niedrig") {
+      return "Basierend auf Ihrer Eingabe konnten wir nur eingeschränkt Comparator-Kandidaten identifizieren.";
+    }
+    return "Basierend auf Ihrer Eingabe haben wir passende Comparator-Kandidaten identifiziert.";
+  };
+
+  // Reliability badge mapping
+  const getReliabilityBadge = (rel: "hoch" | "mittel" | "niedrig") => {
+    const mapping = {
+      hoch: { text: "✅ Belastbar", bgColor: "bg-green-500/10", textColor: "text-green-400", borderColor: "border-green-500/30" },
+      mittel: { text: "🟡 Mit Einschränkungen", bgColor: "bg-yellow-500/10", textColor: "text-yellow-400", borderColor: "border-yellow-500/30" },
+      niedrig: { text: "🔴 Nicht belastbar", bgColor: "bg-red-500/10", textColor: "text-red-400", borderColor: "border-red-500/30" },
+    };
+    return mapping[rel];
+  };
+
+  const reliabilityBadge = getReliabilityBadge(reliability);
+
   return (
     <section className="space-y-6">
       <header 
@@ -86,7 +111,7 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
             Ergebnis<span className="italic text-white/40">liste</span>
           </h1>
           <p className="text-ink-soft text-sm font-light leading-relaxed max-w-sm">
-            Basierend auf Ihrer Eingabe haben wir passende Comparator-Kandidaten identifiziert.
+            {getHeaderText()}
           </p>
         </div>
       </header>
@@ -119,56 +144,99 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
           <RefreshCw className="h-4 w-4" />
           Neue Anfrage
         </button>
+      </div>
+
+      {/* (1) Reliability Card - Always visible at top */}
+      <div className={`rounded-xl border ${reliabilityBadge.borderColor} ${reliabilityBadge.bgColor} px-4 py-4 space-y-3`}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
+            Ergebnis-Verlässlichkeit
+          </h3>
+          <span className={`text-xs font-semibold px-3 py-1 rounded-full ${reliabilityBadge.bgColor} ${reliabilityBadge.textColor} border ${reliabilityBadge.borderColor}`}>
+            {reliabilityBadge.text}
+          </span>
+        </div>
         
-
+        {reliabilityReasons.length > 0 && (
+          <ul className="space-y-2">
+            {reliabilityReasons.map((reason, i) => (
+              <li key={i} className="text-sm text-ink-soft leading-relaxed flex items-start gap-2">
+                <span className="text-gold mt-0.5">•</span>
+                <span>{reason}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        
+        {/* Notices (if any) - visually separated */}
+        {data.notices && data.notices.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-white/[0.1] space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-gold/80">
+              Hinweise
+            </p>
+            {data.notices.map((notice, i) => (
+              <p key={i} className="text-sm text-ink-soft leading-relaxed">{notice}</p>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-4">
-        <div className="rounded-l-xl border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
-          <span className="block font-serif text-[24px] leading-none text-gold">{data.candidates.length}</span>
-          <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Kandidaten</span>
-        </div>
-        <div className="border-t border-b border-white/[0.13] bg-surface px-3 py-3.5 text-center">
-          <span className="block font-serif text-[24px] leading-none text-gold">
-            {data.candidates[0]?.support_score.toFixed(2) ?? "—"}
-          </span>
-          <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Top-Score</span>
-        </div>
-        <div className="border-t border-b border-white/[0.13] bg-surface px-3 py-3.5 text-center">
-          <span className="block font-serif text-[24px] leading-none text-gold">
-            {data.candidates.reduce((sum, c) => sum + c.support_cases, 0)}
-          </span>
-          <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">G-BA-Fälle</span>
-        </div>
-        <div className="rounded-r-xl border border-white/[0.13] bg-surface px-3 py-3.5 text-center">
-          <span className="block font-serif text-[24px] leading-none text-gold">
-            {mapAmbiguityToEindeutigkeit(data.ambiguity)}
-          </span>
-          <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.08em] text-ink-muted">Eindeutigkeit</span>
+      {/* (2) Data Basis Card - Always visible, NOT collapsible */}
+      <div className="rounded-xl border border-white/[0.13] bg-surface px-4 py-4 space-y-3">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
+          Datenbasis
+        </h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-ink-muted">Fälle</span>
+            {/* Show support_cases from top candidate only (as per requirements: focus on top candidate's evidence) */}
+            <span className="block font-serif text-[24px] leading-none text-gold">
+              {data.candidates[0]?.support_cases ?? 0}
+            </span>
+          </div>
+          <div className="space-y-1">
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-ink-muted">Trennschärfe</span>
+            <span className="block font-serif text-[24px] leading-none text-gold">
+              {data.candidates.length >= 2 && status !== "no_result" ? mapAmbiguityToEindeutigkeit(data.ambiguity) : "—"}
+            </span>
+          </div>
+          <div className="space-y-1">
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-ink-muted">Modellsicherheit</span>
+            <span className="block font-serif text-[24px] leading-none text-gold">
+              {data.candidates[0]?.confidence ?? "—"}
+            </span>
+          </div>
+          <div className="space-y-1">
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-ink-muted">Ähnlichkeit</span>
+            <span className="block font-serif text-[24px] leading-none text-gold">
+              {data.candidates[0]?.support_score.toFixed(2) ?? "—"}
+            </span>
+          </div>
         </div>
       </div>
 
-      {data.notices && data.notices.length > 0 && (
-        <div className="rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 space-y-1">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-gold">
-            Hinweise zur Ergebnisqualität
+      {/* (3) Candidate List - conditional on status */}
+      {status === "no_result" || data.candidates.length === 0 ? (
+        <div className="rounded-xl border border-white/[0.13] bg-surface px-6 py-8 text-center space-y-4">
+          <p className="text-lg text-ink-soft">
+            Leider konnten wir keine passenden Comparator-Kandidaten identifizieren.
           </p>
-          {data.notices.map((notice, i) => (
-            <p key={i} className="text-sm text-ink-soft leading-relaxed">{notice}</p>
-          ))}
+          <p className="text-sm text-ink-muted">
+            Bitte präzisieren Sie Ihre Eingabe oder kontaktieren Sie uns für weitere Unterstützung.
+          </p>
+        </div>
+      ) : (
+        <div>
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            RANKED NACH SUPPORT SCORE
+          </h2>
+          <div>
+            {data.candidates.map((candidate) => (
+              <CandidateCard key={`${candidate.rank}-${candidate.candidate_text}`} candidate={candidate} />
+            ))}
+          </div>
         </div>
       )}
-
-      <div>
-        <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">
-          RANKED NACH SUPPORT SCORE
-        </h2>
-        <div>
-          {data.candidates.map((candidate) => (
-            <CandidateCard key={`${candidate.rank}-${candidate.candidate_text}`} candidate={candidate} />
-          ))}
-        </div>
-      </div>
     </section>
   );
 }

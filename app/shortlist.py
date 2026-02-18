@@ -497,6 +497,92 @@ def aggregate_score(best_by_decision: dict[str, float]) -> float:
     return base * (1 + coverage_bonus)
 
 
+def derive_reliability(
+    status: str,
+    candidates: list[CandidateResult],
+    ambiguity: str,
+    reasons: list[str] | None,
+    notices: list[str] | None,
+) -> tuple[str, list[str]]:
+    """Derive reliability assessment from existing signals.
+    
+    Args:
+        status: "ok" | "needs_clarification" | "no_result"
+        candidates: ranked list of candidates
+        ambiguity: "hoch" | "mittel" | "niedrig"
+        reasons: Quality-Gate reasons
+        notices: hints/notices
+        
+    Returns:
+        tuple of (reliability, reliability_reasons)
+        reliability: "hoch" | "mittel" | "niedrig"
+        reliability_reasons: list of max 3 prioritized, actionable reasons
+    """
+    # Hard guard: kein Ergebnis => nicht belastbar
+    if status == "no_result" or not candidates:
+        return "niedrig", ["Kein belastbares Ergebnis gefunden."]
+    
+    top = candidates[0]
+    cases = top.support_cases or 0
+    conf = top.confidence  # "hoch"|"mittel"|"niedrig"
+    
+    # signals
+    # More robust fallback detection: check for specific substrings that indicate fallback/analog scenarios
+    has_fallback = ("AREA_FALLBACK" in (reasons or [])) or any(
+        ("Analogfällen" in n or "andere Therapiegebiete berücksichtigt" in n) for n in (notices or [])
+    )
+    high_amb = (ambiguity == "hoch")
+    low_conf = (conf == "niedrig")
+    
+    # Evidence tiers (realistisch für Datenbestand)
+    strong_evid = cases >= 3
+    med_evid = cases == 2
+    weak_evid = cases <= 1
+    
+    # ── Reliability decision ──
+    # NIEDRIG: Blocker / kritisch
+    if "TOO_GENERIC" in (reasons or []):
+        rel = "niedrig"
+    elif weak_evid and (low_conf or high_amb):
+        rel = "niedrig"
+    
+    # HOCH: ODER-Gate (zwei Wege)
+    elif strong_evid and conf == "hoch" and not high_amb:
+        rel = "hoch"
+    elif strong_evid and ambiguity == "niedrig" and not has_fallback:
+        rel = "hoch"
+    
+    # MITTEL: alles dazwischen
+    else:
+        rel = "mittel"
+    
+    # ── Reasons: priorisiert (max 3) ──
+    reason_priority: list[tuple[str, int]] = []
+    
+    # (1) Blocker: zuerst, weil actionable
+    if "TOO_GENERIC" in (reasons or []):
+        reason_priority.append(("Eingabe ist zu allgemein – bitte präzisieren.", 1))
+    if weak_evid:
+        reason_priority.append(("Sehr wenige ähnliche Entscheidungen vorhanden.", 1))
+    
+    # (2) Warnings
+    if has_fallback:
+        reason_priority.append(("Wenig Daten im Therapiegebiet – Ergebnis basiert auf Analogfällen.", 2))
+    if high_amb:
+        reason_priority.append(("Mehrere Comparatoren sind ähnlich plausibel.", 2))
+    
+    # (3) Info
+    if low_conf:
+        reason_priority.append(("Die Übereinstimmung ist nur schwach.", 3))
+    
+    reason_priority.sort(key=lambda x: x[1])
+    texts = [t for t, _ in reason_priority[:3]]
+    if not texts:
+        texts = ["Bewertung basiert auf verfügbaren G-BA-Entscheidungen."]
+    
+    return rel, texts
+
+
 def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, list[str]]:
     query = build_query(payload)
     query_tokens = set(tokenize(query))

@@ -8,3 +8,4 @@ data/app.db
 amnog-frontend/node_modules/
 amnog-frontend/.next/
 amnog-frontend/package-lock.json
+amnog-frontend/tsconfig.tsbuildinfo

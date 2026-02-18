@@ -1,6 +1,7 @@
 import pytest
 import json
-from app.domain import ComparatorType, Setting, ShortlistRequest, TherapyArea, TherapyLine, TherapyRole
+from app.domain import ComparatorType, Setting, ShortlistRequest, TherapyArea, TherapyLine, TherapyRole, CandidateResult as DomainCandidateResult, ReferenceItem as DomainReferenceItem
+from app.models import CandidateResult
 from app.shortlist import (
     PatientGroupRecord,
     build_query,
@@ -8,6 +9,7 @@ from app.shortlist import (
     recency_weight,
     shortlist,
     load_area_stats,
+    derive_reliability,
 )
 
 
@@ -251,3 +253,163 @@ def test_build_query_without_optional_fields() -> None:
     assert "NSCLC" in query
     assert "Therapielinie" not in query
     assert "Comparator-Typ" not in query
+
+
+# ===== Tests for derive_reliability() =====
+
+
+def _make_candidate(support_cases: int, confidence: str, support_score: float = 1.0) -> CandidateResult:
+    """Helper to create a CandidateResult for testing."""
+    return CandidateResult(
+        rank=1,
+        candidate_text="Test Candidate",
+        support_score=support_score,
+        confidence=confidence,
+        support_cases=support_cases,
+        references=[],
+    )
+
+
+def test_derive_reliability_no_result() -> None:
+    """no_result -> reliability='niedrig'"""
+    rel, reasons = derive_reliability(
+        status="no_result",
+        candidates=[],
+        ambiguity="niedrig",
+        reasons=None,
+        notices=None,
+    )
+    assert rel == "niedrig"
+    assert "Kein belastbares Ergebnis gefunden." in reasons
+
+
+def test_derive_reliability_too_generic() -> None:
+    """TOO_GENERIC -> reliability='niedrig' + erster Grund 'zu allgemein'"""
+    candidates = [_make_candidate(support_cases=3, confidence="hoch")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="niedrig",
+        reasons=["TOO_GENERIC"],
+        notices=None,
+    )
+    assert rel == "niedrig"
+    assert "Eingabe ist zu allgemein – bitte präzisieren." == reasons[0]
+
+
+def test_derive_reliability_weak_evidence_low_conf() -> None:
+    """cases=1 + low_conf -> reliability='niedrig'"""
+    candidates = [_make_candidate(support_cases=1, confidence="niedrig")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="niedrig",
+        reasons=None,
+        notices=None,
+    )
+    assert rel == "niedrig"
+    assert "Sehr wenige ähnliche Entscheidungen vorhanden." in reasons
+
+
+def test_derive_reliability_weak_evidence_high_amb() -> None:
+    """cases=1 + high_amb -> reliability='niedrig'"""
+    candidates = [_make_candidate(support_cases=1, confidence="mittel")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="hoch",
+        reasons=None,
+        notices=None,
+    )
+    assert rel == "niedrig"
+    assert "Sehr wenige ähnliche Entscheidungen vorhanden." in reasons
+
+
+def test_derive_reliability_strong_evidence_high_conf_no_high_amb() -> None:
+    """cases>=3 + conf='hoch' + amb!='hoch' -> reliability='hoch'"""
+    candidates = [_make_candidate(support_cases=3, confidence="hoch")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="niedrig",
+        reasons=None,
+        notices=None,
+    )
+    assert rel == "hoch"
+
+
+def test_derive_reliability_strong_evidence_low_amb_no_fallback() -> None:
+    """cases>=3 + amb='niedrig' + no fallback -> reliability='hoch'"""
+    candidates = [_make_candidate(support_cases=4, confidence="mittel")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="niedrig",
+        reasons=None,
+        notices=[],
+    )
+    assert rel == "hoch"
+
+
+def test_derive_reliability_medium_with_fallback() -> None:
+    """cases=2 + fallback notice -> reliability='mittel' with fallback reason"""
+    candidates = [_make_candidate(support_cases=2, confidence="mittel")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="mittel",
+        reasons=None,
+        notices=["Ergebnis basiert auf Analogfällen"],
+    )
+    assert rel == "mittel"
+    assert any("Analogfällen" in r for r in reasons)
+
+
+def test_derive_reliability_reason_priority_blocker_first() -> None:
+    """Blocker reasons should appear before warnings."""
+    candidates = [_make_candidate(support_cases=1, confidence="niedrig")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="hoch",
+        reasons=["TOO_GENERIC"],
+        notices=["Ergebnis basiert auf Analogfällen"],
+    )
+    assert rel == "niedrig"
+    # TOO_GENERIC (blocker) should be first
+    assert "Eingabe ist zu allgemein" in reasons[0]
+    # weak_evid (blocker) should be second
+    assert "Sehr wenige ähnliche Entscheidungen" in reasons[1]
+    # Fallback or high_amb (warning) should be third (max 3)
+    assert len(reasons) == 3
+    # The third reason should be a warning (either fallback or high_amb)
+    assert any("Analogfällen" in r or "ähnlich plausibel" in r for r in reasons)
+
+
+def test_derive_reliability_max_three_reasons() -> None:
+    """Should return at most 3 reasons."""
+    candidates = [_make_candidate(support_cases=1, confidence="niedrig")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="hoch",
+        reasons=["TOO_GENERIC"],
+        notices=["Ergebnis basiert auf Analogfällen"],
+    )
+    assert len(reasons) <= 3
+
+
+def test_derive_reliability_default_reason_when_no_signals() -> None:
+    """When no specific signals, should return default reason."""
+    candidates = [_make_candidate(support_cases=2, confidence="mittel")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="mittel",
+        reasons=None,
+        notices=None,
+    )
+    # Should be mittel (not high or low)
+    assert rel == "mittel"
+    # Should have the default reason
+    assert "Bewertung basiert auf verfügbaren G-BA-Entscheidungen." in reasons
