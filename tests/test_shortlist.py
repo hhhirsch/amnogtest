@@ -1,8 +1,9 @@
 import pytest
 import json
-from app.domain import Setting, ShortlistRequest, TherapyArea, TherapyRole
+from app.domain import ComparatorType, Setting, ShortlistRequest, TherapyArea, TherapyLine, TherapyRole
 from app.shortlist import (
     PatientGroupRecord,
+    build_query,
     normalize_candidate,
     recency_weight,
     shortlist,
@@ -96,8 +97,8 @@ def test_load_area_stats_corrupt_file_returns_empty(tmp_path, monkeypatch) -> No
     sl.load_area_stats.cache_clear()
 
 
-def test_notices_disabled_by_default(monkeypatch) -> None:
-    """With ENABLE_ZVT_NOTICES=0 (default), notices must always be empty."""
+def test_notices_disabled_when_flag_off(monkeypatch) -> None:
+    """With ENABLE_ZVT_NOTICES=0 (explicitly disabled), notices must always be empty."""
     import app.shortlist as sl
     monkeypatch.setattr(sl, "ENABLE_ZVT_NOTICES", False)
 
@@ -215,3 +216,38 @@ def test_notices_no_warning_when_thresholds_not_met(tmp_path, monkeypatch) -> No
     orphan_notices = [n for n in notices if "Orphan" in n or "Sonderverfahren" in n]
     assert orphan_notices == []
     sl.load_area_stats.cache_clear()
+
+
+def test_notices_enabled_by_default() -> None:
+    """ENABLE_ZVT_NOTICES should default to True (default env value '1')."""
+    import app.shortlist as sl
+    assert sl.ENABLE_ZVT_NOTICES is True
+
+
+def test_build_query_includes_line_and_comparator_type() -> None:
+    """build_query should include line and comparator_type when provided."""
+    payload = ShortlistRequest(
+        therapy_area=TherapyArea.ONKOLOGIE,
+        indication_text="NSCLC",
+        setting=Setting.AMBULANT,
+        role=TherapyRole.REPLACEMENT,
+        line=TherapyLine.L2,
+        comparator_type=ComparatorType.AKTIV,
+    )
+    query = build_query(payload)
+    assert "Therapielinie: 2L" in query
+    assert "Comparator-Typ: aktiv" in query
+
+
+def test_build_query_without_optional_fields() -> None:
+    """build_query should work without line and comparator_type."""
+    payload = ShortlistRequest(
+        therapy_area=TherapyArea.ONKOLOGIE,
+        indication_text="NSCLC",
+        setting=Setting.AMBULANT,
+        role=TherapyRole.REPLACEMENT,
+    )
+    query = build_query(payload)
+    assert "NSCLC" in query
+    assert "Therapielinie" not in query
+    assert "Comparator-Typ" not in query

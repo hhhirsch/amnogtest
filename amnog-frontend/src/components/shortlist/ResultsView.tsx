@@ -148,6 +148,17 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
         </div>
       </div>
 
+      {data.notices && data.notices.length > 0 && (
+        <div className="rounded-xl border border-gold/30 bg-gold/5 px-4 py-3 space-y-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gold">
+            Hinweise zur Ergebnisqualität
+          </p>
+          {data.notices.map((notice, i) => (
+            <p key={i} className="text-sm text-ink-soft leading-relaxed">{notice}</p>
+          ))}
+        </div>
+      )}
+
       <div>
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">
           RANKED NACH SUPPORT SCORE

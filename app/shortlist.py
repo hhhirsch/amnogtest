@@ -21,7 +21,7 @@ DATA_DIR = BASE_DIR / "data"
 PATIENT_GROUPS_PATH = Path(os.getenv("PATIENT_GROUPS_PATH", str(DATA_DIR / "patient_groups_v2.json")))
 STATS_PATH = Path(os.getenv("PATIENT_GROUPS_STATS_PATH", str(DATA_DIR / "patient_groups_stats.json")))
 
-ENABLE_ZVT_NOTICES = os.getenv("ENABLE_ZVT_NOTICES", "0") == "1"
+ENABLE_ZVT_NOTICES = os.getenv("ENABLE_ZVT_NOTICES", "1") == "1"
 
 # Tokenization / preprocessing
 WORD_RE = re.compile(r"[A-Za-zÄÖÜäöüß0-9]+")
@@ -472,6 +472,10 @@ def build_query(payload: ShortlistRequest) -> str:
     parts = [payload.indication_text]
     if payload.population_text:
         parts.append(payload.population_text)
+    if payload.line:
+        parts.append(f"Therapielinie: {payload.line.value}")
+    if payload.comparator_type:
+        parts.append(f"Comparator-Typ: {payload.comparator_type.value}")
     if payload.comparator_text:
         parts.append(payload.comparator_text)
     return "\n".join(parts)
