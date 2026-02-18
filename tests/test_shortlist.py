@@ -1,10 +1,12 @@
 import pytest
+import json
 from app.domain import Setting, ShortlistRequest, TherapyArea, TherapyRole
 from app.shortlist import (
     PatientGroupRecord,
     normalize_candidate,
     recency_weight,
     shortlist,
+    load_area_stats,
 )
 
 
@@ -61,7 +63,7 @@ def test_shortlist_caps_score_per_decision(monkeypatch) -> None:
         role=TherapyRole.REPLACEMENT,
     )
 
-    candidates, _ = shortlist(payload)
+    candidates, _, _notices = shortlist(payload)
 
     assert len(candidates) == 1
     assert candidates[0].support_cases == 1
@@ -72,3 +74,144 @@ def test_shortlist_caps_score_per_decision(monkeypatch) -> None:
 
 def test_recency_weight_invalid_date_fallback() -> None:
     assert recency_weight("invalid") == 0.8
+
+
+def test_load_area_stats_missing_file_returns_empty(tmp_path, monkeypatch) -> None:
+    """load_area_stats() must never crash and return {} when the file is absent."""
+    import app.shortlist as sl
+    monkeypatch.setattr(sl, "STATS_PATH", tmp_path / "nonexistent.json")
+    sl.load_area_stats.cache_clear()
+    assert sl.load_area_stats() == {}
+    sl.load_area_stats.cache_clear()
+
+
+def test_load_area_stats_corrupt_file_returns_empty(tmp_path, monkeypatch) -> None:
+    """load_area_stats() must never crash and return {} when the file is corrupt."""
+    import app.shortlist as sl
+    bad_file = tmp_path / "patient_groups_stats.json"
+    bad_file.write_text("NOT JSON", encoding="utf-8")
+    monkeypatch.setattr(sl, "STATS_PATH", bad_file)
+    sl.load_area_stats.cache_clear()
+    assert sl.load_area_stats() == {}
+    sl.load_area_stats.cache_clear()
+
+
+def test_notices_disabled_by_default(monkeypatch) -> None:
+    """With ENABLE_ZVT_NOTICES=0 (default), notices must always be empty."""
+    import app.shortlist as sl
+    monkeypatch.setattr(sl, "ENABLE_ZVT_NOTICES", False)
+
+    payload = ShortlistRequest(
+        therapy_area=TherapyArea.ONKOLOGIE,
+        indication_text="NSCLC test",
+        setting=Setting.AMBULANT,
+        role=TherapyRole.REPLACEMENT,
+    )
+    _candidates, _ambiguity, notices = shortlist(payload)
+    assert notices == []
+
+
+def test_notices_enabled_no_stats_file(tmp_path, monkeypatch) -> None:
+    """With ENABLE_ZVT_NOTICES=1 and missing stats file, no orphan warning is emitted."""
+    import app.shortlist as sl
+    monkeypatch.setattr(sl, "ENABLE_ZVT_NOTICES", True)
+    monkeypatch.setattr(sl, "STATS_PATH", tmp_path / "nonexistent.json")
+    sl.load_area_stats.cache_clear()
+
+    payload = ShortlistRequest(
+        therapy_area=TherapyArea.ONKOLOGIE,
+        indication_text="NSCLC test",
+        setting=Setting.AMBULANT,
+        role=TherapyRole.REPLACEMENT,
+    )
+    _candidates, _ambiguity, notices = shortlist(payload)
+    # No orphan/Sonderverfahren warning when stats file is absent
+    assert not any("Orphan" in n or "Sonderverfahren" in n for n in notices)
+    sl.load_area_stats.cache_clear()
+
+
+def test_notices_enabled_with_stats_below_threshold(tmp_path, monkeypatch) -> None:
+    """With ENABLE_ZVT_NOTICES=1 and has_zvt_rows < 15, a warning notice is added."""
+    import app.shortlist as sl
+    stats = {
+        "Onkologie": {
+            "total_rows": 20,
+            "has_zvt_rows": 5,
+            "orphan_rows": 2,
+            "orphan_missing_zvt_rows": 1,
+        }
+    }
+    stats_file = tmp_path / "patient_groups_stats.json"
+    stats_file.write_text(json.dumps(stats), encoding="utf-8")
+    monkeypatch.setattr(sl, "ENABLE_ZVT_NOTICES", True)
+    monkeypatch.setattr(sl, "STATS_PATH", stats_file)
+    sl.load_area_stats.cache_clear()
+
+    payload = ShortlistRequest(
+        therapy_area=TherapyArea.ONKOLOGIE,
+        indication_text="NSCLC test",
+        setting=Setting.AMBULANT,
+        role=TherapyRole.REPLACEMENT,
+    )
+    _candidates, _ambiguity, notices = shortlist(payload)
+    assert len(notices) >= 1
+    assert "Orphan" in notices[0] or "Sonderverfahren" in notices[0]
+    sl.load_area_stats.cache_clear()
+
+
+def test_notices_enabled_with_high_orphan_ratio(tmp_path, monkeypatch) -> None:
+    """With ENABLE_ZVT_NOTICES=1 and orphan_missing_ratio >= 0.5, a warning is added."""
+    import app.shortlist as sl
+    stats = {
+        "Onkologie": {
+            "total_rows": 10,
+            "has_zvt_rows": 20,  # > 15 so threshold 1 not triggered
+            "orphan_rows": 6,
+            "orphan_missing_zvt_rows": 5,  # ratio = 5/10 = 0.5
+        }
+    }
+    stats_file = tmp_path / "patient_groups_stats.json"
+    stats_file.write_text(json.dumps(stats), encoding="utf-8")
+    monkeypatch.setattr(sl, "ENABLE_ZVT_NOTICES", True)
+    monkeypatch.setattr(sl, "STATS_PATH", stats_file)
+    sl.load_area_stats.cache_clear()
+
+    payload = ShortlistRequest(
+        therapy_area=TherapyArea.ONKOLOGIE,
+        indication_text="NSCLC test",
+        setting=Setting.AMBULANT,
+        role=TherapyRole.REPLACEMENT,
+    )
+    _candidates, _ambiguity, notices = shortlist(payload)
+    assert len(notices) >= 1
+    sl.load_area_stats.cache_clear()
+
+
+def test_notices_no_warning_when_thresholds_not_met(tmp_path, monkeypatch) -> None:
+    """With sufficient zVT coverage, no Orphan warning should appear."""
+    import app.shortlist as sl
+    stats = {
+        "Onkologie": {
+            "total_rows": 100,
+            "has_zvt_rows": 80,  # >= 15
+            "orphan_rows": 4,
+            "orphan_missing_zvt_rows": 3,  # ratio = 3/100 = 0.03 < 0.5
+        }
+    }
+    stats_file = tmp_path / "patient_groups_stats.json"
+    stats_file.write_text(json.dumps(stats), encoding="utf-8")
+    monkeypatch.setattr(sl, "ENABLE_ZVT_NOTICES", True)
+    monkeypatch.setattr(sl, "STATS_PATH", stats_file)
+    sl.load_area_stats.cache_clear()
+
+    payload = ShortlistRequest(
+        therapy_area=TherapyArea.ONKOLOGIE,
+        indication_text="NSCLC test",
+        setting=Setting.AMBULANT,
+        role=TherapyRole.REPLACEMENT,
+    )
+    _candidates, _ambiguity, notices = shortlist(payload)
+    # No orphan warning should be present (only possible fallback notice)
+    orphan_notices = [n for n in notices if "Orphan" in n or "Sonderverfahren" in n]
+    assert orphan_notices == []
+    sl.load_area_stats.cache_clear()

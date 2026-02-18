@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -20,6 +21,11 @@ COL_PG_ID = "BE.PAT_GR_INFO_COLLECTION.ID_PAT_GR.Attribute:value"
 COL_PG_TEXT = "BE.PAT_GR_INFO_COLLECTION.ID_PAT_GR.NAME_PAT_GR"
 COL_AWG_BESCHLUSS = "BE.PAT_GR_INFO_COLLECTION.ID_PAT_GR.AWG_BESCHLUSS.Attribute:value"
 COL_ZVT = "BE.PAT_GR_INFO_COLLECTION.ID_PAT_GR.ZVT_BEST.NAME_ZVT_BEST.Attribute:value"
+
+# Optional columns — converter falls back gracefully when absent
+COL_REG_NB = "BE.REG_NB.Attribute:value"
+COL_UES_ZVT_ZN = "BE.PAT_GR_INFO_COLLECTION.ID_PAT_GR.UES_ZVT_ZN.Attribute:value"
+COL_ORPHAN = "BE.ZUL.SOND_ZUL_ORPHAN.Attribute:value"
 
 HTML_TAG_RE = re.compile(r"<[^>]+>")
 WS_RE = re.compile(r"\s+")
@@ -72,15 +78,48 @@ def main(xlsx_path: str, out_json: str) -> None:
     if missing:
         raise SystemExit(f"Missing columns: {missing}")
 
-    records: List[Dict[str, Any]] = []
-    for _, row in df.iterrows():
-        zvt = row.get(COL_ZVT)
-        if zvt is None or (isinstance(zvt, float) and pd.isna(zvt)):
-            continue
+    has_ues_col = COL_UES_ZVT_ZN in df.columns
+    has_reg_nb_col = COL_REG_NB in df.columns
+    has_orphan_col = COL_ORPHAN in df.columns
 
+    records: List[Dict[str, Any]] = []
+    stats: Dict[str, Dict[str, int]] = defaultdict(
+        lambda: {"total_rows": 0, "has_zvt_rows": 0, "orphan_rows": 0, "orphan_missing_zvt_rows": 0}
+    )
+
+    for _, row in df.iterrows():
         awg_text = clean_text(row.get(COL_AWG))
         pg_text = clean_text(row.get(COL_PG_TEXT))
         awg_beschluss = clean_text(row.get(COL_AWG_BESCHLUSS)) if COL_AWG_BESCHLUSS in df.columns else ""
+        therapy_area = infer_therapy_area(awg_text, pg_text, awg_beschluss)
+
+        zvt_text = clean_text(row.get(COL_ZVT))
+
+        if has_ues_col:
+            ues = clean_text(row.get(COL_UES_ZVT_ZN))
+            has_zvt = (ues == "Zusatznutzen und zweckmäßige Vergleichstherapie") and bool(zvt_text)
+        else:
+            has_zvt = bool(zvt_text)
+
+        procedure_type = clean_text(row.get(COL_REG_NB)) if has_reg_nb_col else ""
+
+        raw_orphan = row.get(COL_ORPHAN) if has_orphan_col else None
+        try:
+            is_orphan = 0 if (
+                raw_orphan is None
+                or (isinstance(raw_orphan, float) and pd.isna(raw_orphan))
+            ) else (1 if str(raw_orphan).strip() == "1" else 0)
+        except Exception:
+            is_orphan = 0
+
+        # Stats are collected for ALL rows (before the strict filter below)
+        stats[therapy_area]["total_rows"] += 1
+        stats[therapy_area]["has_zvt_rows"] += int(has_zvt)
+        stats[therapy_area]["orphan_rows"] += int(is_orphan)
+        stats[therapy_area]["orphan_missing_zvt_rows"] += int(is_orphan and not has_zvt)
+
+        if not has_zvt:
+            continue
 
         rec = {
             "patient_group_id": str(row.get(COL_PG_ID)),
@@ -88,23 +127,31 @@ def main(xlsx_path: str, out_json: str) -> None:
             "product_name": clean_text(row.get(COL_PRODUCT)),
             "decision_date": parse_decision_date(row.get(COL_AKZ)),
             "url": clean_text(row.get(COL_URL)),
-            "therapy_area": infer_therapy_area(awg_text, pg_text, awg_beschluss),
+            "therapy_area": therapy_area,
             "awg_text": awg_text,
             "patient_group_text": pg_text,
-            "zvt_text": clean_text(zvt),
+            "zvt_text": zvt_text,
+            "procedure_type": procedure_type,
+            "has_zvt": has_zvt,
         }
         records.append(rec)
 
     Path(out_json).parent.mkdir(parents=True, exist_ok=True)
     Path(out_json).write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # kleine Statistik
-    counts = {}
+    stats_json = str(Path(out_json).parent / "patient_groups_stats.json")
+    Path(stats_json).write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # Statistik
+    counts: Dict[str, int] = {}
     for r in records:
         counts[r["therapy_area"]] = counts.get(r["therapy_area"], 0) + 1
     top = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:10]
     print(f"Wrote {len(records)} records -> {out_json}")
     print("Top therapy areas:", top)
+    top_stats = sorted(stats.items(), key=lambda x: x[1]["total_rows"], reverse=True)[:5]
+    print("Stats summary (top areas by total_rows):", [(a, dict(s)) for a, s in top_stats])
+    print(f"Stats written -> {stats_json}")
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:

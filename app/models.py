@@ -127,16 +127,19 @@ class ShortlistResponse(BaseModel):
     candidates: list[CandidateResult]
     ambiguity: str
     generated_at: datetime
+    notices: list[str] = []
 
     @staticmethod
     def from_domain(
-        run_id: str, candidates: list[d.CandidateResult], ambiguity: str, generated_at: datetime
+        run_id: str, candidates: list[d.CandidateResult], ambiguity: str, generated_at: datetime,
+        notices: list[str] | None = None,
     ) -> "ShortlistResponse":
         return ShortlistResponse(
             run_id=run_id,
             candidates=[CandidateResult.from_domain(c) for c in candidates],
             ambiguity=ambiguity,
             generated_at=generated_at,
+            notices=notices or [],
         )
 
 
