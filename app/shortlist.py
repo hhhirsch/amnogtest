@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import re
@@ -13,8 +14,12 @@ from typing import Mapping, Optional
 
 from app.domain import CandidateResult, ReferenceItem, ShortlistRequest
 
-DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "patient_groups.json"
-STATS_PATH = Path(__file__).resolve().parent.parent / "data" / "patient_groups_stats.json"
+logger = logging.getLogger(__name__)
+
+BASE_DIR = Path(__file__).resolve().parent  # .../app
+DATA_DIR = BASE_DIR / "data"
+PATIENT_GROUPS_PATH = Path(os.getenv("PATIENT_GROUPS_PATH", str(DATA_DIR / "patient_groups_v2.json")))
+STATS_PATH = Path(os.getenv("PATIENT_GROUPS_STATS_PATH", str(DATA_DIR / "patient_groups_stats.json")))
 
 ENABLE_ZVT_NOTICES = os.getenv("ENABLE_ZVT_NOTICES", "0") == "1"
 
@@ -180,9 +185,13 @@ class BM25Stats:
 
 @lru_cache(maxsize=1)
 def load_records() -> tuple[PatientGroupRecord, ...]:
-    rows = json.loads(DATA_PATH.read_text(encoding="utf-8"))
+    if not PATIENT_GROUPS_PATH.exists():
+        raise RuntimeError(f"Patient groups data file not found: {PATIENT_GROUPS_PATH}")
+    rows = json.loads(PATIENT_GROUPS_PATH.read_text(encoding="utf-8"))
     known_fields = {f.name for f in PatientGroupRecord.__dataclass_fields__.values()}  # type: ignore[attr-defined]
-    return tuple(PatientGroupRecord(**{k: v for k, v in row.items() if k in known_fields}) for row in rows)
+    records = tuple(PatientGroupRecord(**{k: v for k, v in row.items() if k in known_fields}) for row in rows)
+    logger.info("Loaded patient_groups from %s (%d records)", PATIENT_GROUPS_PATH, len(records))
+    return records
 
 
 @lru_cache(maxsize=32)
