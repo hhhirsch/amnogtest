@@ -1,0 +1,86 @@
+{
+  "Sonstiges": {
+    "total_rows": 170,
+    "has_zvt_rows": 121,
+    "orphan_rows": 90,
+    "orphan_missing_zvt_rows": 48
+  },
+  "Onkologie": {
+    "total_rows": 438,
+    "has_zvt_rows": 401,
+    "orphan_rows": 62,
+    "orphan_missing_zvt_rows": 32
+  },
+  "Muskel-Skelett": {
+    "total_rows": 5,
+    "has_zvt_rows": 5,
+    "orphan_rows": 0,
+    "orphan_missing_zvt_rows": 0
+  },
+  "Infektionen": {
+    "total_rows": 100,
+    "has_zvt_rows": 63,
+    "orphan_rows": 2,
+    "orphan_missing_zvt_rows": 2
+  },
+  "Atmung": {
+    "total_rows": 45,
+    "has_zvt_rows": 37,
+    "orphan_rows": 3,
+    "orphan_missing_zvt_rows": 3
+  },
+  "Herz-Kreislauf": {
+    "total_rows": 37,
+    "has_zvt_rows": 37,
+    "orphan_rows": 1,
+    "orphan_missing_zvt_rows": 0
+  },
+  "Verdauung": {
+    "total_rows": 64,
+    "has_zvt_rows": 60,
+    "orphan_rows": 4,
+    "orphan_missing_zvt_rows": 4
+  },
+  "Stoffwechsel": {
+    "total_rows": 20,
+    "has_zvt_rows": 17,
+    "orphan_rows": 3,
+    "orphan_missing_zvt_rows": 3
+  },
+  "Haut": {
+    "total_rows": 46,
+    "has_zvt_rows": 44,
+    "orphan_rows": 2,
+    "orphan_missing_zvt_rows": 2
+  },
+  "Blut/Blutbildend": {
+    "total_rows": 32,
+    "has_zvt_rows": 16,
+    "orphan_rows": 23,
+    "orphan_missing_zvt_rows": 16
+  },
+  "Nervensystem": {
+    "total_rows": 37,
+    "has_zvt_rows": 33,
+    "orphan_rows": 8,
+    "orphan_missing_zvt_rows": 3
+  },
+  "Psychische": {
+    "total_rows": 4,
+    "has_zvt_rows": 4,
+    "orphan_rows": 0,
+    "orphan_missing_zvt_rows": 0
+  },
+  "Urogenital": {
+    "total_rows": 16,
+    "has_zvt_rows": 15,
+    "orphan_rows": 5,
+    "orphan_missing_zvt_rows": 1
+  },
+  "Augenerkrankungen": {
+    "total_rows": 8,
+    "has_zvt_rows": 8,
+    "orphan_rows": 0,
+    "orphan_missing_zvt_rows": 0
+  }
+}
