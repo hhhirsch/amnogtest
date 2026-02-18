@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { CandidateResult } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
 
 export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
   const [expanded, setExpanded] = useState(false);
@@ -52,7 +53,21 @@ export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
             </span>
           </div>
 
-          <div className="text-sm text-slate-400">Fälle: {candidate.support_cases}</div>
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+            <Badge
+              variant={
+                candidate.confidence === "hoch"
+                  ? "high"
+                  : candidate.confidence === "mittel"
+                  ? "medium"
+                  : "low"
+              }
+              dot
+            >
+              Confidence: {candidate.confidence}
+            </Badge>
+            <span>Fälle: {candidate.support_cases}</span>
+          </div>
 
           {/* Expandable References */}
           <div>

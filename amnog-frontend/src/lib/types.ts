@@ -43,6 +43,7 @@ export type ShortlistResponse = {
   candidates: CandidateResult[];
   ambiguity: "hoch" | "mittel" | "niedrig";
   generated_at: string;
+  notices?: string[];
 };
 
 export type RunResponse = {
