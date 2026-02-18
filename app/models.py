@@ -128,11 +128,20 @@ class ShortlistResponse(BaseModel):
     ambiguity: str
     generated_at: datetime
     notices: list[str] = []
+    status: str = "ok"  # "ok" | "needs_clarification" | "no_result"
+    reasons: list[str] = []  # e.g., ["LOW_EVIDENCE", "HIGH_AMBIGUITY"]
+    diagnostics: Optional[dict] = None
 
     @staticmethod
     def from_domain(
-        run_id: str, candidates: list[d.CandidateResult], ambiguity: str, generated_at: datetime,
+        run_id: str, 
+        candidates: list[d.CandidateResult], 
+        ambiguity: str, 
+        generated_at: datetime,
         notices: list[str] | None = None,
+        status: str = "ok",
+        reasons: list[str] | None = None,
+        diagnostics: dict | None = None,
     ) -> "ShortlistResponse":
         return ShortlistResponse(
             run_id=run_id,
@@ -140,6 +149,9 @@ class ShortlistResponse(BaseModel):
             ambiguity=ambiguity,
             generated_at=generated_at,
             notices=notices or [],
+            status=status,
+            reasons=reasons or [],
+            diagnostics=diagnostics,
         )
 
 

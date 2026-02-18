@@ -474,6 +474,14 @@ def build_query(payload: ShortlistRequest) -> str:
         parts.append(payload.population_text)
     if payload.comparator_text:
         parts.append(payload.comparator_text)
+    
+    # Include structured fields for better matching
+    if payload.line and payload.line.value != "unklar":
+        parts.append(payload.line.value)
+    
+    if payload.comparator_type and payload.comparator_type.value != "unklar":
+        parts.append(payload.comparator_type.value)
+    
     return "\n".join(parts)
 
 
@@ -493,7 +501,22 @@ def aggregate_score(best_by_decision: dict[str, float]) -> float:
     return base * (1 + coverage_bonus)
 
 
-def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, list[str]]:
+def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, list[str], str, list[str], dict]:
+    """
+    Returns: (candidates, ambiguity, notices, status, reasons, diagnostics)
+    
+    Status can be:
+    - "ok": Show candidates with confidence
+    - "needs_clarification": Show candidates but flag as uncertain
+    - "no_result": Don't show candidates (prevent false positives)
+    
+    Reasons can include:
+    - "LOW_EVIDENCE": Top candidate has too few cases or low score
+    - "HIGH_AMBIGUITY": Scores are too close together
+    - "TOO_GENERIC": Input is too short/generic
+    - "AREA_FALLBACK": Used global corpus instead of area-specific
+    - "NO_CANDIDATES": No results found
+    """
     query = build_query(payload)
     query_tokens = set(tokenize(query))
 
@@ -627,23 +650,95 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, li
     ambiguity = ambiguity_label([c.support_score for c in candidates])
 
     notices: list[str] = []
-    if ENABLE_ZVT_NOTICES:
-        area_stats = load_area_stats().get(area_value)
-        if area_stats:
-            total = area_stats.get("total_rows", 0)
-            has_zvt = area_stats.get("has_zvt_rows", 0)
-            orphan_missing = area_stats.get("orphan_missing_zvt_rows", 0)
-            orphan_missing_ratio = orphan_missing / total if total else 0
-            if has_zvt < 15 or orphan_missing_ratio >= 0.50:
-                notices.append(
-                    "Für dieses Therapiegebiet liegen viele Orphan-/Sonderverfahren ohne festgelegte zVT vor. "
-                    "Ergebnisse basieren auf Analogfällen und können fachfremd sein."
-                )
-        if not use_area_corpus:
+    # Always enable notices (changed from ENABLE_ZVT_NOTICES default=0)
+    area_stats = load_area_stats().get(area_value)
+    if area_stats:
+        total = area_stats.get("total_rows", 0)
+        has_zvt = area_stats.get("has_zvt_rows", 0)
+        orphan_missing = area_stats.get("orphan_missing_zvt_rows", 0)
+        orphan_missing_ratio = orphan_missing / total if total else 0
+        if has_zvt < 15 or orphan_missing_ratio >= 0.50:
             notices.append(
-                "Hinweis: Es wurden ergänzend andere Therapiegebiete berücksichtigt (mit Abschlag), "
-                "weil im gewählten Gebiet zu wenige passende Präzedenzfälle vorlagen."
+                "Für dieses Therapiegebiet liegen viele Orphan-/Sonderverfahren ohne festgelegte zVT vor. "
+                "Ergebnisse basieren auf Analogfällen und können fachfremd sein."
             )
+    if not use_area_corpus:
+        notices.append(
+            "Hinweis: Es wurden ergänzend andere Therapiegebiete berücksichtigt (mit Abschlag), "
+            "weil im gewählten Gebiet zu wenige passende Präzedenzfälle vorlagen."
+        )
 
-    return candidates, ambiguity, notices
+    # ========== Quality Gate ==========
+    # Determine status and reasons based on evidence quality
+    
+    status = "ok"
+    reasons: list[str] = []
+    diagnostics = {
+        "query_token_count": len(query_tokens),
+        "use_area_corpus": use_area_corpus,
+        "candidate_count": len(candidates),
+        "top_score": top_score,
+        "ambiguity": ambiguity,
+    }
+    
+    # Check TOO_GENERIC early (before checking if we have candidates)
+    # because we want to flag this even if no results are found
+    MIN_TOKEN_COUNT = 3
+    if len(query_tokens) < MIN_TOKEN_COUNT:
+        reasons.append("TOO_GENERIC")
+        status = "needs_clarification"
+    
+    # Check 1: No candidates at all
+    if not candidates:
+        if status == "needs_clarification":
+            # Keep needs_clarification if already set
+            pass
+        else:
+            status = "no_result"
+        reasons.append("NO_CANDIDATES")
+    else:
+        top_candidate = candidates[0]
+        
+        # Check 3: Low evidence (top candidate has insufficient support)
+        # Lower thresholds to reduce false negatives
+        MIN_SUPPORT_CASES = 1  # At least 1 case
+        MIN_SUPPORT_SCORE = 0.1  # Very low minimum score
+        
+        has_low_evidence = (
+            top_candidate.support_cases < MIN_SUPPORT_CASES or 
+            top_score < MIN_SUPPORT_SCORE
+        )
+        
+        if has_low_evidence:
+            # Only block if confidence is explicitly low AND we have very weak evidence
+            if top_candidate.confidence == "niedrig" and top_candidate.support_cases < 1:
+                status = "no_result"
+                reasons.append("LOW_EVIDENCE")
+            elif status == "ok":
+                # Flag for clarification if evidence is weak
+                status = "needs_clarification"
+                reasons.append("LOW_EVIDENCE")
+        
+        # Check 4: High ambiguity
+        if ambiguity == "hoch":
+            if status == "ok":  # Don't downgrade from no_result
+                status = "needs_clarification"
+            reasons.append("HIGH_AMBIGUITY")
+        
+        # Check 5: Area fallback - just flag it, don't block
+        if not use_area_corpus:
+            reasons.append("AREA_FALLBACK")
+            # Only block if we have extremely weak evidence in fallback mode
+            if top_candidate.support_cases < 1 or top_score < 0.1:
+                if status != "no_result":  # Don't override if already no_result
+                    status = "needs_clarification"
+                    if "LOW_EVIDENCE" not in reasons:
+                        reasons.append("LOW_EVIDENCE")
+    
+    # If status is no_result, clear candidates to prevent false positives
+    
+    # If status is no_result, clear candidates to prevent false positives
+    final_candidates = [] if status == "no_result" else candidates
+    
+    return final_candidates, ambiguity, notices, status, reasons, diagnostics
 
