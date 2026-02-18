@@ -74,12 +74,26 @@ def create_shortlist(payload: ShortlistRequest) -> ShortlistResponse:
 
     # Convert Domain -> Pydantic response models
     candidates = [CandidateResult.from_domain(c) for c in domain_candidates]
+    
+    # Derive reliability from candidates
+    status = "no_result" if not candidates else "ok"
+    from app.shortlist import derive_reliability
+    reliability, reliability_reasons = derive_reliability(
+        status=status,
+        candidates=candidates,
+        ambiguity=ambiguity,
+        reasons=None,  # We don't currently track Quality-Gate reasons
+        notices=notices,
+    )
+    
     response_payload = {
         "run_id": run_id,
         "candidates": [c.model_dump() for c in candidates],
         "ambiguity": ambiguity,
         "generated_at": generated_at.isoformat(),
         "notices": notices,
+        "reliability": reliability,
+        "reliability_reasons": reliability_reasons,
     }
 
     save_run(run_id, payload.model_dump(), response_payload)

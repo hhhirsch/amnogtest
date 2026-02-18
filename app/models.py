@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -128,6 +128,8 @@ class ShortlistResponse(BaseModel):
     ambiguity: str
     generated_at: datetime
     notices: list[str] = []
+    reliability: Literal["hoch", "mittel", "niedrig"] = "mittel"
+    reliability_reasons: list[str] = []
 
     @staticmethod
     def from_domain(
