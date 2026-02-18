@@ -189,6 +189,7 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
             <span className="block text-[10px] font-medium uppercase tracking-wider text-ink-muted">Fälle</span>
+            {/* Show support_cases from top candidate only (as per requirements: focus on top candidate's evidence) */}
             <span className="block font-serif text-[24px] leading-none text-gold">
               {data.candidates[0]?.support_cases ?? 0}
             </span>

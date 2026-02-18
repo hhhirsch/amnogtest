@@ -527,8 +527,9 @@ def derive_reliability(
     conf = top.confidence  # "hoch"|"mittel"|"niedrig"
     
     # signals
+    # More robust fallback detection: check for specific substrings that indicate fallback/analog scenarios
     has_fallback = ("AREA_FALLBACK" in (reasons or [])) or any(
-        ("Analog" in n) or ("Fallback" in n) for n in (notices or [])
+        ("Analogfällen" in n or "andere Therapiegebiete berücksichtigt" in n) for n in (notices or [])
     )
     high_amb = (ambiguity == "hoch")
     low_conf = (conf == "niedrig")
