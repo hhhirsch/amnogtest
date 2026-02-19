@@ -158,6 +158,21 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
           </span>
         </div>
         
+        {reliability === "hoch" && (
+          <div className="space-y-1">
+            <p className="text-sm text-ink-soft leading-relaxed">
+              Die Top-Option ist durch mehrere vergleichbare G-BA-Entscheidungen gut gestützt.
+            </p>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              Die Einordnung ist relativ innerhalb dieser Anfrage und keine klinische Empfehlung.
+            </p>
+          </div>
+        )}
+        {reliability === "mittel" && reliabilityReasons.length > 0 && (
+          <p className="text-sm text-ink-soft leading-relaxed">
+            Die Ergebnisse sind grundsätzlich gestützt, aber folgende Punkte schränken die Verlässlichkeit ein:
+          </p>
+        )}
         {reliabilityReasons.length > 0 && (
           <ul className="space-y-2">
             {reliabilityReasons.map((reason, i) => (
@@ -192,25 +207,25 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
         <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
           Datenbasis
         </h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-3">
           <div className="space-y-1">
-            <span className="block text-[10px] font-medium uppercase tracking-wider text-ink-muted">Fälle</span>
-            {/* Show support_cases from top candidate only (as per requirements: focus on top candidate's evidence) */}
             <span className="block font-serif text-[24px] leading-none text-gold">
               {data.candidates[0]?.support_cases ?? 0}
             </span>
+            {/* Show support_cases from top candidate only (as per requirements: focus on top candidate's evidence) */}
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-ink-muted">Fälle</span>
           </div>
           <div className="space-y-1">
-            <span className="block text-[10px] font-medium uppercase tracking-wider text-ink-muted">Trennschärfe</span>
             <span className="block font-serif text-[24px] leading-none text-gold">
               {data.candidates.length >= 2 && status !== "no_result" ? mapAmbiguityToEindeutigkeit(data.ambiguity) : "—"}
             </span>
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-ink-muted">Trennschärfe</span>
           </div>
           <div className="space-y-1">
-            <span className="block text-[10px] font-medium uppercase tracking-wider text-ink-muted">Modellsicherheit</span>
             <span className="block font-serif text-[24px] leading-none text-gold">
               {data.candidates[0]?.confidence ?? "—"}
             </span>
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-ink-muted">Modellsicherheit</span>
           </div>
         </div>
       </div>
