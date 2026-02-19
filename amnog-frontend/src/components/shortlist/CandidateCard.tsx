@@ -6,7 +6,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import type { CandidateResult } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 
-export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
+export function CandidateCard({ candidate, hideDetails }: { candidate: CandidateResult; hideDetails?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [showReferences, setShowReferences] = useState(false);
 
@@ -31,12 +31,14 @@ export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
             {candidate.candidate_text}
           </p>
 
-          <button
-            className="text-sm text-gold-500 hover:underline"
-            onClick={() => setExpanded((prev) => !prev)}
-          >
-            {expanded ? "Weniger anzeigen" : "Mehr anzeigen"}
-          </button>
+          {!hideDetails && (
+            <button
+              className="text-sm text-gold-500 hover:underline"
+              onClick={() => setExpanded((prev) => !prev)}
+            >
+              {expanded ? "Weniger anzeigen" : "Mehr anzeigen"}
+            </button>
+          )}
 
           {/* Score Bar */}
           <div className="flex items-center gap-2.5">
@@ -70,33 +72,35 @@ export function CandidateCard({ candidate }: { candidate: CandidateResult }) {
           </div>
 
           {/* Expandable References */}
-          <div>
-            <button
-              className="flex items-center gap-1 text-sm font-medium text-gold-500 hover:underline"
-              onClick={() => setShowReferences((prev) => !prev)}
-            >
-              Belege anzeigen
-              {showReferences ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
+          {!hideDetails && (
+            <div>
+              <button
+                className="flex items-center gap-1 text-sm font-medium text-gold-500 hover:underline"
+                onClick={() => setShowReferences((prev) => !prev)}
+              >
+                Belege anzeigen
+                {showReferences ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
 
-            {showReferences && (
-              <ul className="mt-3 space-y-2 text-sm">
-                {candidate.references.map((ref) => (
-                  <li key={ref.decision_id + ref.url} className="rounded-md border border-slate-700 bg-slate-900 p-3">
-                    <a
-                      className="font-medium text-gold-400 hover:underline"
-                      href={ref.url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {ref.product_name} · {ref.decision_date}
-                    </a>
-                    <p className="mt-1 text-slate-400">{ref.snippet}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+              {showReferences && (
+                <ul className="mt-3 space-y-2 text-sm">
+                  {candidate.references.map((ref) => (
+                    <li key={ref.decision_id + ref.url} className="rounded-md border border-slate-700 bg-slate-900 p-3">
+                      <a
+                        className="font-medium text-gold-400 hover:underline"
+                        href={ref.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {ref.product_name} · {ref.decision_date}
+                      </a>
+                      <p className="mt-1 text-slate-400">{ref.snippet}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
