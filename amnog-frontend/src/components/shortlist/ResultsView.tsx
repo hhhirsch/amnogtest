@@ -21,6 +21,7 @@ const mapAmbiguityToEindeutigkeit = (ambiguity: "hoch" | "mittel" | "niedrig"): 
 };
 
 const STORAGE_KEY = "amnog-shortlist-draft";
+const MAX_RELIABILITY_REASONS = 3;
 
 export function ResultsView({ data }: { data: ShortlistResponse }) {
   const router = useRouter();
@@ -73,7 +74,7 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
   // Derive status if not explicitly provided
   const status = data.status || (data.candidates.length === 0 ? "no_result" : "ok");
   const reliability = data.reliability ?? data.plausibility ?? "mittel";
-  const reliabilityReasons = (data.reliability_reasons ?? data.plausibility_reasons ?? []).slice(0, 3);
+  const reliabilityReasons = (data.reliability_reasons ?? data.plausibility_reasons ?? []).slice(0, MAX_RELIABILITY_REASONS);
 
   // Determine header text based on reliability/status
   const getHeaderText = () => {
