@@ -74,7 +74,36 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
   // Derive status if not explicitly provided
   const status = data.status || (data.candidates.length === 0 ? "no_result" : "ok");
   const reliability = data.reliability ?? data.plausibility ?? "mittel";
-  const reliabilityReasons = (data.reliability_reasons ?? data.plausibility_reasons ?? []).slice(0, MAX_RELIABILITY_REASONS);
+
+  // Filter the generic fallback sentence which is not suitable as a bullet for hoch/mittel
+  const rawReasons = (data.reliability_reasons ?? data.plausibility_reasons ?? []).filter(
+    (r) => !r.toLowerCase().includes("bewertung basiert")
+  );
+
+  // Compute FE-side fallback reasons when backend provided none
+  const cases = data.candidates[0]?.support_cases ?? 0;
+  const topConf = data.candidates[0]?.confidence ?? "mittel";
+  const ambiguity = data.ambiguity ?? "mittel";
+
+  let reliabilityReasons: string[];
+  if (rawReasons.length > 0) {
+    reliabilityReasons = rawReasons.slice(0, MAX_RELIABILITY_REASONS);
+  } else if (reliability === "mittel") {
+    const lim: string[] = [];
+    if (cases === 2) lim.push("Nur 2 ähnliche Entscheidungen vorhanden.");
+    if (ambiguity === "hoch") lim.push("Mehrere Comparatoren sind ähnlich plausibel.");
+    else if (ambiguity === "mittel") lim.push("Trennschärfe ist nur mittel – mehrere Optionen bleiben möglich.");
+    if (topConf === "niedrig") lim.push("Die Übereinstimmung ist nur schwach.");
+    reliabilityReasons = lim.slice(0, 2); // max 2, same as backend fallback
+  } else if (reliability === "hoch") {
+    const pos: string[] = [];
+    if (cases >= 3) pos.push(`${cases} vergleichbare Entscheidungen stützen die Top-Option.`);
+    if (ambiguity === "niedrig") pos.push("Klare Trennschärfe zwischen Top-Option und Alternativen.");
+    if (topConf === "hoch") pos.push("Hohe Modellsicherheit des Matchings.");
+    reliabilityReasons = pos.slice(0, 2); // max 2, same as backend fallback
+  } else {
+    reliabilityReasons = [];
+  }
 
   // Determine header text based on reliability/status
   const getHeaderText = () => {

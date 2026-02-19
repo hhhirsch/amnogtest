@@ -399,8 +399,8 @@ def test_derive_reliability_max_three_reasons() -> None:
     assert len(reasons) <= 3
 
 
-def test_derive_reliability_default_reason_when_no_signals() -> None:
-    """When no specific signals, should return default reason."""
+def test_derive_reliability_mittel_no_generic_fallback() -> None:
+    """For mittel with cases=2 and ambiguity=mittel, concrete limiting reasons are used, not the generic fallback."""
     candidates = [_make_candidate(support_cases=2, confidence="mittel")]
     rel, reasons = derive_reliability(
         status="ok",
@@ -409,7 +409,25 @@ def test_derive_reliability_default_reason_when_no_signals() -> None:
         reasons=None,
         notices=None,
     )
-    # Should be mittel (not high or low)
     assert rel == "mittel"
-    # Should have the default reason
-    assert "Bewertung basiert auf verfügbaren G-BA-Entscheidungen." in reasons
+    # Must NOT use the generic fallback sentence
+    assert "Bewertung basiert auf verfügbaren G-BA-Entscheidungen." not in reasons
+    # Must use concrete limiting reasons
+    assert "Nur 2 ähnliche Entscheidungen vorhanden." in reasons
+    assert "Trennschärfe ist nur mittel – mehrere Optionen bleiben möglich." in reasons
+
+
+def test_derive_reliability_hoch_positive_bullets() -> None:
+    """For hoch with cases>=3, ambiguity=niedrig, conf=hoch: positive bullets, no generic fallback."""
+    candidates = [_make_candidate(support_cases=5, confidence="hoch")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="niedrig",
+        reasons=None,
+        notices=None,
+    )
+    assert rel == "hoch"
+    assert "Bewertung basiert auf verfügbaren G-BA-Entscheidungen." not in reasons
+    assert "5 vergleichbare Entscheidungen stützen die Top-Option." in reasons
+    assert "Klare Trennschärfe zwischen Top-Option und Alternativen." in reasons
