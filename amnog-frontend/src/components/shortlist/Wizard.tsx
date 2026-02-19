@@ -78,7 +78,16 @@ export function Wizard({ onStepChange }: { onStepChange?: (step: number) => void
     try {
       const response = await createShortlist(parsed.data);
       localStorage.removeItem(STORAGE_KEY);
-      router.push(`/lead/${response.run_id}`);
+      const isWeak =
+        response.plausibility === "niedrig" ||
+        response.status === "no_result";
+      if (isWeak) {
+        // Skip lead gate for weak/no results
+        localStorage.setItem(`lead_submitted:${response.run_id}`, "true");
+        router.push(`/run/${response.run_id}`);
+      } else {
+        router.push(`/lead/${response.run_id}`);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unbekannter Fehler");
     } finally {
