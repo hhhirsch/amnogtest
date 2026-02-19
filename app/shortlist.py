@@ -578,8 +578,31 @@ def derive_reliability(
     reason_priority.sort(key=lambda x: x[1])
     texts = [t for t, _ in reason_priority[:3]]
     if not texts:
-        texts = ["Bewertung basiert auf verfügbaren G-BA-Entscheidungen."]
-    
+        if rel == "hoch":
+            pos: list[str] = []
+            if cases >= 3:
+                pos.append(f"{cases} vergleichbare Entscheidungen stützen die Top-Option.")
+            if ambiguity == "niedrig":
+                pos.append("Klare Trennschärfe zwischen Top-Option und Alternativen.")
+            if conf == "hoch":
+                pos.append("Hohe Modellsicherheit des Matchings.")
+            texts = pos[:2]
+        elif rel == "mittel":
+            lim: list[str] = []
+            if cases == 2:
+                lim.append("Nur 2 ähnliche Entscheidungen vorhanden.")
+            if ambiguity == "hoch":
+                lim.append("Mehrere Comparatoren sind ähnlich plausibel.")
+            elif ambiguity == "mittel":
+                lim.append("Trennschärfe ist nur mittel – mehrere Optionen bleiben möglich.")
+            if conf == "niedrig":
+                lim.append("Die Übereinstimmung ist nur schwach.")
+            if has_fallback:
+                lim.append("Wenig Daten im Therapiegebiet – Ergebnis basiert auf Analogfällen.")
+            texts = lim[:2]
+        else:
+            texts = ["Kein belastbares Ergebnis gefunden."]
+
     return rel, texts
 
 
