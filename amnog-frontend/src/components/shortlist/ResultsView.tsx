@@ -192,9 +192,6 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
             <p className="text-sm text-ink-soft leading-relaxed">
               Die Top-Option ist durch mehrere vergleichbare G-BA-Entscheidungen gut gestützt.
             </p>
-            <p className="text-xs text-ink-muted leading-relaxed">
-              Die Einordnung ist relativ innerhalb dieser Anfrage und keine klinische Empfehlung.
-            </p>
           </div>
         )}
         {reliability === "mittel" && reliabilityReasons.length > 0 && (
