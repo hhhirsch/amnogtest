@@ -46,6 +46,8 @@ export type ShortlistResponse = {
   notices?: string[];
   reliability?: "hoch" | "mittel" | "niedrig";
   reliability_reasons?: string[];
+  plausibility?: "hoch" | "mittel" | "niedrig";
+  plausibility_reasons?: string[];
   status?: "ok" | "needs_clarification" | "no_result";
   reasons?: string[];
 };

@@ -21,6 +21,7 @@ const mapAmbiguityToEindeutigkeit = (ambiguity: "hoch" | "mittel" | "niedrig"): 
 };
 
 const STORAGE_KEY = "amnog-shortlist-draft";
+const MAX_RELIABILITY_REASONS = 3;
 
 export function ResultsView({ data }: { data: ShortlistResponse }) {
   const router = useRouter();
@@ -72,8 +73,8 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
 
   // Derive status if not explicitly provided
   const status = data.status || (data.candidates.length === 0 ? "no_result" : "ok");
-  const reliability = data.reliability || "mittel";
-  const reliabilityReasons = data.reliability_reasons || [];
+  const reliability = data.reliability ?? data.plausibility ?? "mittel";
+  const reliabilityReasons = (data.reliability_reasons ?? data.plausibility_reasons ?? []).slice(0, MAX_RELIABILITY_REASONS);
 
   // Determine header text based on reliability/status
   const getHeaderText = () => {
@@ -167,6 +168,11 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
             ))}
           </ul>
         )}
+        {reliability === "mittel" && reliabilityReasons.length === 0 && (
+          <p className="text-sm text-ink-soft leading-relaxed">
+            Bewertung basiert auf verfügbaren G-BA-Entscheidungen.
+          </p>
+        )}
         
         {/* Notices (if any) - visually separated */}
         {data.notices && data.notices.length > 0 && (
@@ -204,12 +210,6 @@ export function ResultsView({ data }: { data: ShortlistResponse }) {
             <span className="block text-[10px] font-medium uppercase tracking-wider text-ink-muted">Modellsicherheit</span>
             <span className="block font-serif text-[24px] leading-none text-gold">
               {data.candidates[0]?.confidence ?? "—"}
-            </span>
-          </div>
-          <div className="space-y-1">
-            <span className="block text-[10px] font-medium uppercase tracking-wider text-ink-muted">Ähnlichkeit</span>
-            <span className="block font-serif text-[24px] leading-none text-gold">
-              {data.candidates[0]?.support_score.toFixed(2) ?? "—"}
             </span>
           </div>
         </div>
