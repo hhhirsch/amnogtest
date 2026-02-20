@@ -14,6 +14,11 @@ import type { ShortlistResponse } from "@/lib/types";
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const FALLBACK_REASON_FILTER = "bewertung basiert";
 
+const checkIsNoResult = (data: Pick<ShortlistResponse, "plausibility" | "status" | "candidates">) =>
+  data.plausibility === "niedrig" ||
+  data.status === "no_result" ||
+  !data.candidates?.length;
+
 // Map ambiguity values to Eindeutigkeit (inverted)
 const mapAmbiguityToEindeutigkeit = (
   ambiguity: "hoch" | "mittel" | "niedrig"
@@ -79,8 +84,7 @@ export default function LeadClient() {
       .then((res) => {
         if (!mounted) return;
         const payload = res.response_payload;
-        const isWeak =
-          payload.plausibility === "niedrig" || payload.status === "no_result";
+        const isWeak = checkIsNoResult(payload);
         if (isWeak) {
           // No gate for weak/no-result — redirect directly to /run
           localStorage.setItem(`lead_submitted:${runId}`, "true");
@@ -167,8 +171,32 @@ export default function LeadClient() {
   const topCandidate = data.candidates[0] ?? null;
   const blurredCandidates = data.candidates.slice(1, 5);
 
+  const isNoResult = checkIsNoResult(data);
+
   return (
     <section className="space-y-6 pb-16">
+      {/* Header — same branding as results page */}
+      <header
+        className="bg-bg pt-14 pb-9 px-5 relative overflow-hidden before:content-[attr(data-watermark)] before:font-serif before:text-[130px] before:text-white/[0.025] before:absolute before:top-0 before:right-0 before:pointer-events-none"
+        data-watermark="SHORTLIST"
+      >
+        <div className="relative z-10 space-y-3">
+          <p className="text-gold text-[10px] font-medium tracking-[0.18em] uppercase flex items-center gap-2">
+            <span className="inline-block w-4 h-px bg-gold"></span>
+            COMPARATOR-SHORTLIST
+            <span className="inline-block w-4 h-px bg-gold"></span>
+          </p>
+          <h1 className="font-serif text-[42px] leading-tight text-white">
+            Ergebnis<span className="italic text-white/40">liste</span>
+          </h1>
+          <p className="text-ink-soft text-sm font-light leading-relaxed max-w-sm">
+            {isNoResult
+              ? "Basierend auf Ihrer Eingabe konnten wir nur eingeschränkt Comparator-Kandidaten identifizieren."
+              : "Basierend auf Ihrer Eingabe haben wir passende Comparator-Kandidaten identifiziert."}
+          </p>
+        </div>
+      </header>
+
       {/* (A) Reliability Card */}
       <div
         className={`rounded-xl border ${reliabilityBadge.borderColor} ${reliabilityBadge.bgColor} px-4 py-4 space-y-3`}
@@ -244,60 +272,156 @@ export default function LeadClient() {
         </div>
       </div>
 
-      {/* (C) Top Candidate — fully visible, no details */}
-      {topCandidate && (
-        <div>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Top-Kandidat
-          </h2>
-          <CandidateCard candidate={topCandidate} hideDetails />
-        </div>
-      )}
-
-      {/* (D+E) Blurred list + overlay lead capture form */}
-      {blurredCandidates.length > 0 && (
-        <div className="relative">
-          {/* Blurred candidates */}
-          <div
-            aria-hidden="true"
-            style={{
-              filter: "blur(8px)",
-              opacity: 0.4,
-              pointerEvents: "none",
-              userSelect: "none",
-            }}
-          >
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Weitere Kandidaten
+      {/* (C) Top Candidate + Lead Capture — tight vertical rhythm */}
+      {isNoResult ? (
+        /* No-result guidance card */
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-8 space-y-5">
+          <div className="space-y-2">
+            <h2 className="text-base font-semibold text-white">
+              🔴 Kein belastbares Ergebnis gefunden
             </h2>
-            {blurredCandidates.map((candidate) => (
-              <CandidateCard
-                key={`${candidate.rank}-${candidate.candidate_text}`}
-                candidate={candidate}
-                hideDetails
-              />
-            ))}
+            <p className="text-sm text-ink-soft leading-relaxed">
+              Bitte Anfrage nachschärfen und erneut generieren.
+            </p>
           </div>
+          <ul className="space-y-2">
+            {[
+              "Indikation präzisieren (z.B. Unterpopulation / Line of Therapy)",
+              "Zielpopulation genauer definieren (z.B. vorbehandelt / refraktär)",
+              "Comparator-Setting (BSC vs aktive Therapie) prüfen",
+            ].map((tip) => (
+              <li key={tip} className="flex items-start gap-2 text-sm text-ink-soft">
+                <span className="text-gold mt-0.5">•</span>
+                <span>{tip}</span>
+              </li>
+            ))}
+          </ul>
+          <NewRequestButton />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {/* Top Candidate — fully visible, no details */}
+          {topCandidate && (
+            <div>
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Top-Kandidat
+              </h2>
+              <CandidateCard candidate={topCandidate} hideDetails />
+            </div>
+          )}
 
-          {/* (E) Overlay Lead Capture Form */}
-          <div className="absolute inset-0 flex items-center justify-center px-4 py-8 bg-bg/60 backdrop-blur-sm rounded-xl">
-            <div className="w-full max-w-sm bg-surface border border-white/[0.13] rounded-[20px] p-6 shadow-[0_24px_64px_rgba(0,0,0,0.6)] relative overflow-hidden">
-              {/* Gold top-line */}
+          {/* (D+E) Blurred list + overlay lead capture form */}
+          {blurredCandidates.length > 0 && (
+            <div className="relative">
+              {/* Blurred candidates */}
+              <div
+                aria-hidden="true"
+                style={{
+                  filter: "blur(8px)",
+                  opacity: 0.4,
+                  pointerEvents: "none",
+                  userSelect: "none",
+                }}
+              >
+                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Weitere Kandidaten
+                </h2>
+                {blurredCandidates.map((candidate) => (
+                  <CandidateCard
+                    key={`${candidate.rank}-${candidate.candidate_text}`}
+                    candidate={candidate}
+                    hideDetails
+                  />
+                ))}
+              </div>
+
+              {/* (E) Overlay Lead Capture Form */}
+              <div className="absolute inset-0 flex items-center justify-center px-4 py-8 bg-bg/60 backdrop-blur-sm rounded-xl">
+                <div className="w-full max-w-sm bg-surface border border-white/[0.13] rounded-[20px] p-6 shadow-[0_24px_64px_rgba(0,0,0,0.6)] relative overflow-hidden">
+                  {/* Gold top-line */}
+                  <div className="absolute h-0.5 inset-x-0 top-0 bg-gradient-to-r from-transparent via-gold to-transparent opacity-60" />
+
+                  <h2 className="font-serif text-[22px] text-ink leading-snug mb-3">
+                    Vollständige Shortlist freischalten
+                  </h2>
+
+                  <ul className="space-y-1.5 mb-4">
+                    {["Kandidaten 2–5", "G-BA Belege pro Kandidat", "PDF-Export"].map((item) => (
+                      <li key={item} className="flex items-center gap-2 text-sm text-ink-soft">
+                        <span className="text-gold">✓</span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <form className="space-y-3" onSubmit={onSubmit}>
+                    <Input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@firma.de"
+                    />
+                    <Input
+                      value={company}
+                      onChange={(e) => setCompany(e.target.value)}
+                      placeholder="Firma (optional)"
+                    />
+
+                    <div>
+                      <label className="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={consent}
+                          onChange={(e) => {
+                            setConsent(e.target.checked);
+                            setConsentError(false);
+                          }}
+                          className="mt-0.5 cursor-pointer accent-gold"
+                        />
+                        <span>
+                          Ich habe die Datenschutzerklärung gelesen und bin einverstanden.
+                        </span>
+                      </label>
+                      {consentError && (
+                        <p className="text-xs text-red-400 mt-1.5 ml-6">
+                          Bitte stimmen Sie der Datenschutzerklärung zu.
+                        </p>
+                      )}
+                      <p className="text-xs text-slate-400 opacity-70 mt-2 ml-6 leading-relaxed">
+                        E-Mail nur zur Zustellung. Kein Newsletter ohne Zustimmung. Details in der{" "}
+                        <PrivacyPolicyModal />.
+                      </p>
+                    </div>
+
+                    <Button
+                      type="submit"
+                      disabled={busy || !emailIsValid || !consent}
+                      className="w-full rounded-[10px] py-3.5 bg-gold hover:bg-gold/90 text-slate-900 font-medium"
+                    >
+                      {busy ? "Speichere..." : "Shortlist freischalten"}
+                    </Button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Fallback when no blurred candidates (e.g. only 1 result) — show form inline */}
+          {blurredCandidates.length === 0 && (
+            <div className="rounded-[20px] border border-white/[0.13] bg-surface p-6 relative overflow-hidden shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
               <div className="absolute h-0.5 inset-x-0 top-0 bg-gradient-to-r from-transparent via-gold to-transparent opacity-60" />
-
               <h2 className="font-serif text-[22px] text-ink leading-snug mb-3">
                 Vollständige Shortlist freischalten
               </h2>
-
               <ul className="space-y-1.5 mb-4">
-                {["Kandidaten 2–5", "G-BA Belege pro Kandidat", "PDF-Export"].map((item) => (
+                {["G-BA Belege zum Kandidaten", "PDF-Export"].map((item) => (
                   <li key={item} className="flex items-center gap-2 text-sm text-ink-soft">
                     <span className="text-gold">✓</span>
                     {item}
                   </li>
                 ))}
               </ul>
-
               <form className="space-y-3" onSubmit={onSubmit}>
                 <Input
                   type="email"
@@ -311,7 +435,6 @@ export default function LeadClient() {
                   onChange={(e) => setCompany(e.target.value)}
                   placeholder="Firma (optional)"
                 />
-
                 <div>
                   <label className="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
                     <input
@@ -323,9 +446,7 @@ export default function LeadClient() {
                       }}
                       className="mt-0.5 cursor-pointer accent-gold"
                     />
-                    <span>
-                      Ich habe die Datenschutzerklärung gelesen und bin einverstanden.
-                    </span>
+                    <span>Ich habe die Datenschutzerklärung gelesen und bin einverstanden.</span>
                   </label>
                   {consentError && (
                     <p className="text-xs text-red-400 mt-1.5 ml-6">
@@ -337,7 +458,6 @@ export default function LeadClient() {
                     <PrivacyPolicyModal />.
                   </p>
                 </div>
-
                 <Button
                   type="submit"
                   disabled={busy || !emailIsValid || !consent}
@@ -347,69 +467,7 @@ export default function LeadClient() {
                 </Button>
               </form>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Fallback when no blurred candidates (e.g. only 1 result) — show form inline */}
-      {blurredCandidates.length === 0 && (
-        <div className="rounded-[20px] border border-white/[0.13] bg-surface p-6 relative overflow-hidden shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
-          <div className="absolute h-0.5 inset-x-0 top-0 bg-gradient-to-r from-transparent via-gold to-transparent opacity-60" />
-          <h2 className="font-serif text-[22px] text-ink leading-snug mb-3">
-            Vollständige Shortlist freischalten
-          </h2>
-          <ul className="space-y-1.5 mb-4">
-            {["G-BA Belege zum Kandidaten", "PDF-Export"].map((item) => (
-              <li key={item} className="flex items-center gap-2 text-sm text-ink-soft">
-                <span className="text-gold">✓</span>
-                {item}
-              </li>
-            ))}
-          </ul>
-          <form className="space-y-3" onSubmit={onSubmit}>
-            <Input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@firma.de"
-            />
-            <Input
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              placeholder="Firma (optional)"
-            />
-            <div>
-              <label className="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={consent}
-                  onChange={(e) => {
-                    setConsent(e.target.checked);
-                    setConsentError(false);
-                  }}
-                  className="mt-0.5 cursor-pointer accent-gold"
-                />
-                <span>Ich habe die Datenschutzerklärung gelesen und bin einverstanden.</span>
-              </label>
-              {consentError && (
-                <p className="text-xs text-red-400 mt-1.5 ml-6">
-                  Bitte stimmen Sie der Datenschutzerklärung zu.
-                </p>
-              )}
-              <p className="text-xs text-slate-400 opacity-70 mt-2 ml-6 leading-relaxed">
-                E-Mail nur zur Zustellung. Kein Newsletter ohne Zustimmung. Details in der{" "}
-                <PrivacyPolicyModal />.
-              </p>
-            </div>
-            <Button
-              type="submit"
-              disabled={busy || !emailIsValid || !consent}
-              className="w-full rounded-[10px] py-3.5 bg-gold hover:bg-gold/90 text-slate-900 font-medium"
-            >
-              {busy ? "Speichere..." : "Shortlist freischalten"}
-            </Button>
-          </form>
+          )}
         </div>
       )}
 
