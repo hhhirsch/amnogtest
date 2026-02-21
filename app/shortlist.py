@@ -12,7 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Mapping, Optional
 
-from app.domain import CandidateResult, ReferenceItem, ShortlistRequest
+from app.domain import CandidateResult, ReferenceItem, ShortlistRequest, TherapyLine
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +105,9 @@ STOPWORDS: set[str] = {
 
 # Keep a few short but semantically relevant tokens (otherwise we drop <=2 chars)
 KEEP_SHORT_TOKENS = {"1l", "2l", "3l", "4l", "5l", "l1", "l2", "l3", "l4", "l5"}
+
+# Red flag keys for domain-level mismatch detection
+RED_FLAG_KEYS = frozenset({"SETTING_MISMATCH_PLATIN", "BSC_CONTRADICTION", "LINE_MISMATCH_1L"})
 
 
 def _normalize_for_tokens(text: str) -> str:
@@ -421,6 +424,103 @@ def normalize_candidate(text: str) -> str:
 
 
 
+def detect_red_flags(
+    query: str,
+    top_candidate: CandidateResult,
+    line: Optional[TherapyLine],
+) -> list[str]:
+    """Detect obvious mismatches between query and top result.
+
+    These are domain-level logic checks that catch clinically implausible
+    matches regardless of BM25 score.
+    """
+    flags: list[str] = []
+    query_lower = query.lower()
+    candidate_text = top_candidate.candidate_text.lower()
+
+    # Rule 1: Post-platinum progression → platinum rechallenge unlikely
+    post_platin_markers = [
+        "progress nach platin", "post-platin", "platinrefraktär",
+        "nach platinbasierter", "platinum-refractory",
+    ]
+    platin_drugs = ["cisplatin", "carboplatin", "oxaliplatin"]
+
+    if any(m in query_lower for m in post_platin_markers):
+        if any(d in candidate_text for d in platin_drugs):
+            flags.append("SETTING_MISMATCH_PLATIN")
+
+    # Rule 2: Systemic therapy suitable → BSC unlikely top choice
+    therapy_suitable_markers = [
+        "weitere systemtherapie", "geeignet für therapie",
+        "standardtherapie kommt in frage",
+    ]
+    bsc_markers = ["best supportive care", "bsc", "symptomatische therapie"]
+
+    if any(m in query_lower for m in therapy_suitable_markers):
+        if any(b in candidate_text for b in bsc_markers):
+            flags.append("BSC_CONTRADICTION")
+
+    # Rule 3: First-line → no post-progression options
+    if line and line.value == "1L":
+        post_prog_markers = ["nach versagen", "nach progress", "vorbehandelt"]
+        if any(m in candidate_text for m in post_prog_markers):
+            flags.append("LINE_MISMATCH_1L")
+
+    return flags
+
+
+def apply_domain_penalties(
+    score: float,
+    query: str,
+    candidate_text: str,
+    line: Optional[TherapyLine],
+) -> float:
+    """Apply soft penalties for clinically implausible matches.
+
+    These are NOT hard filters — they adjust ranking to make better
+    candidates rise to top.
+    """
+    penalty = 1.0
+    query_lower = query.lower()
+    candidate_lower = candidate_text.lower()
+
+    # Penalty 1: Post-platinum progression + platinum comparator
+    post_platin = any(x in query_lower for x in [
+        "progress nach platin", "post-platin", "platinrefraktär",
+        "nach platinbasierter", "platinum-refractory",
+    ])
+    has_platin = any(x in candidate_lower for x in [
+        "cisplatin", "carboplatin", "oxaliplatin",
+    ])
+    if post_platin and has_platin:
+        penalty *= 0.3
+
+    # Penalty 2: Systemic therapy suitable + BSC
+    therapy_ok = any(x in query_lower for x in [
+        "weitere systemtherapie", "geeignet für therapie",
+    ])
+    is_bsc = any(x in candidate_lower for x in [
+        "best supportive care", "bsc", "symptomatische therapie",
+    ])
+    if therapy_ok and is_bsc:
+        penalty *= 0.2
+
+    # Penalty 3: First-line + post-progression options
+    if line and line.value == "1L":
+        is_post_prog = any(x in candidate_lower for x in [
+            "nach versagen", "nach progress", "vorbehandelt",
+        ])
+        if is_post_prog:
+            penalty *= 0.5
+
+    # Boost 4: Late-line + BSC (BSC becomes more likely in 3L+)
+    if line and line.value == "später":
+        if is_bsc or "ärztliche maßgabe" in candidate_lower:
+            penalty *= 1.5
+
+    return score * penalty
+
+
 def _is_combination_therapy_zvt(zvt_lower: str) -> bool:
     """Heuristic: does the zVT text describe a combination/add-on regimen?
 
@@ -533,6 +633,9 @@ def derive_reliability(
     )
     high_amb = (ambiguity == "hoch")
     low_conf = (conf == "niedrig")
+
+    # Detect red flags from reasons
+    red_flags = [r for r in (reasons or []) if r in RED_FLAG_KEYS]
     
     # Evidence tiers (realistisch für Datenbestand)
     strong_evid = cases >= 3
@@ -540,16 +643,19 @@ def derive_reliability(
     weak_evid = cases <= 1
     
     # ── Reliability decision ──
+    # NIEDRIG: Red flags + low evidence → critically unreliable
+    if red_flags and cases <= 2:
+        rel = "niedrig"
     # NIEDRIG: Blocker / kritisch
-    if "TOO_GENERIC" in (reasons or []):
+    elif "TOO_GENERIC" in (reasons or []):
         rel = "niedrig"
     elif weak_evid and (low_conf or high_amb):
         rel = "niedrig"
     
-    # HOCH: ODER-Gate (zwei Wege)
-    elif strong_evid and conf == "hoch" and not high_amb:
+    # HOCH: ODER-Gate (zwei Wege) – only without red flags
+    elif strong_evid and conf == "hoch" and not high_amb and not red_flags:
         rel = "hoch"
-    elif strong_evid and ambiguity == "niedrig" and not has_fallback:
+    elif strong_evid and ambiguity == "niedrig" and not has_fallback and not red_flags:
         rel = "hoch"
     
     # MITTEL: alles dazwischen
@@ -558,6 +664,14 @@ def derive_reliability(
     
     # ── Reasons: priorisiert (max 3) ──
     reason_priority: list[tuple[str, int]] = []
+
+    # (0) Red flags: highest priority
+    if "SETTING_MISMATCH_PLATIN" in red_flags:
+        reason_priority.append(("Therapiesequenz-Matching unsicher (Platin-Rechallenge nach Progress).", 0))
+    if "BSC_CONTRADICTION" in red_flags:
+        reason_priority.append(("Best Supportive Care unwahrscheinlich bei therapiefähigen Patienten.", 0))
+    if "LINE_MISMATCH_1L" in red_flags:
+        reason_priority.append(("Therapielinie stimmt möglicherweise nicht überein.", 0))
     
     # (1) Blocker: zuerst, weil actionable
     if "TOO_GENERIC" in (reasons or []):
@@ -606,9 +720,17 @@ def derive_reliability(
     return rel, texts
 
 
-def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, list[str]]:
+def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, list[str], list[str]]:
     query = build_query(payload)
     query_tokens = set(tokenize(query))
+
+    # Phase 0: Input fidelity logging
+    logger.info(
+        "shortlist input indication_len=%d population_len=%d population_preview=%.80s",
+        len(payload.indication_text or ""),
+        len(payload.population_text or ""),
+        (payload.population_text or "")[:80],
+    )
 
     area_value = payload.therapy_area.value
     primary_records = load_records_for_area(area_value)
@@ -718,6 +840,15 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, li
     for entry in aggregated.values():
         entry["score"] = aggregate_score(entry["best_by_decision"])
 
+    # Apply domain penalties to aggregated candidate scores
+    for entry in aggregated.values():
+        entry["score"] = apply_domain_penalties(
+            entry["score"],
+            query=query,
+            candidate_text=entry["text"],
+            line=payload.line,
+        )
+
     ranked = sorted(aggregated.values(), key=lambda e: e["score"], reverse=True)[:5]
     top_score = ranked[0]["score"] if ranked else 0.0
 
@@ -758,5 +889,15 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, li
                 "weil im gewählten Gebiet zu wenige passende Präzedenzfälle vorlagen."
             )
 
-    return candidates, ambiguity, notices
+    # Red flag detection on top candidate
+    reasons: list[str] = []
+    if candidates:
+        red_flags = detect_red_flags(
+            query=query,
+            top_candidate=candidates[0],
+            line=payload.line,
+        )
+        reasons.extend(red_flags)
+
+    return candidates, ambiguity, notices, reasons
 
