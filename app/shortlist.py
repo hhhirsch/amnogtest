@@ -106,6 +106,9 @@ STOPWORDS: set[str] = {
 # Keep a few short but semantically relevant tokens (otherwise we drop <=2 chars)
 KEEP_SHORT_TOKENS = {"1l", "2l", "3l", "4l", "5l", "l1", "l2", "l3", "l4", "l5"}
 
+# Red flag keys for domain-level mismatch detection
+RED_FLAG_KEYS = frozenset({"SETTING_MISMATCH_PLATIN", "BSC_CONTRADICTION", "LINE_MISMATCH_1L"})
+
 
 def _normalize_for_tokens(text: str) -> str:
     """Lightweight normalization to improve lexical matching.
@@ -505,7 +508,7 @@ def apply_domain_penalties(
     # Penalty 3: First-line + post-progression options
     if line and line.value == "1L":
         is_post_prog = any(x in candidate_lower for x in [
-            "nach versagen", "progress", "vorbehandelt",
+            "nach versagen", "nach progress", "vorbehandelt",
         ])
         if is_post_prog:
             penalty *= 0.5
@@ -632,8 +635,7 @@ def derive_reliability(
     low_conf = (conf == "niedrig")
 
     # Detect red flags from reasons
-    _RED_FLAG_KEYS = {"SETTING_MISMATCH_PLATIN", "BSC_CONTRADICTION", "LINE_MISMATCH_1L"}
-    red_flags = [r for r in (reasons or []) if r in _RED_FLAG_KEYS]
+    red_flags = [r for r in (reasons or []) if r in RED_FLAG_KEYS]
     
     # Evidence tiers (realistisch für Datenbestand)
     strong_evid = cases >= 3
@@ -838,12 +840,11 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, li
     for entry in aggregated.values():
         entry["score"] = aggregate_score(entry["best_by_decision"])
 
-    # Phase 2: Apply domain penalties to aggregated candidate scores
-    query_text = payload.indication_text + " " + (payload.population_text or "")
+    # Apply domain penalties to aggregated candidate scores
     for entry in aggregated.values():
         entry["score"] = apply_domain_penalties(
             entry["score"],
-            query=query_text,
+            query=query,
             candidate_text=entry["text"],
             line=payload.line,
         )
@@ -888,11 +889,11 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, li
                 "weil im gewählten Gebiet zu wenige passende Präzedenzfälle vorlagen."
             )
 
-    # Phase 1: Red flag detection on top candidate
+    # Red flag detection on top candidate
     reasons: list[str] = []
     if candidates:
         red_flags = detect_red_flags(
-            query=query_text,
+            query=query,
             top_candidate=candidates[0],
             line=payload.line,
         )
