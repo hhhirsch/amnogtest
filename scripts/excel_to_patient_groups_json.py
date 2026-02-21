@@ -26,6 +26,11 @@ COL_ZVT = "BE.PAT_GR_INFO_COLLECTION.ID_PAT_GR.ZVT_BEST.NAME_ZVT_BEST.Attribute:
 COL_REG_NB = "BE.REG_NB.Attribute:value"
 COL_UES_ZVT_ZN = "BE.PAT_GR_INFO_COLLECTION.ID_PAT_GR.UES_ZVT_ZN.Attribute:value"
 COL_ORPHAN = "BE.ZUL.SOND_ZUL_ORPHAN.Attribute:value"
+COL_UES_BE = "BE.UES_BE.Attribute:value"
+COL_BESOND = "BE.ZUL.SOND_ZUL_BESOND.Attribute:value"
+COL_AUSN = "BE.ZUL.SOND_ZUL_AUSN.Attribute:value"
+COL_ATMP = "BE.ZUL.SOND_ZUL_ATMP.Attribute:value"
+COL_QS_ATMP = "BE.ZUL.QS_ATMP.Attribute:value"
 
 HTML_TAG_RE = re.compile(r"<[^>]+>")
 WS_RE = re.compile(r"\s+")
@@ -55,6 +60,12 @@ def clean_text(x: Any) -> str:
     s = WS_RE.sub(" ", s).strip()
     return s
 
+def parse_bool_flag(x: Any) -> int:
+    """Return 1 if x represents a truthy flag value, else 0."""
+    if x is None or (isinstance(x, float) and pd.isna(x)):
+        return 0
+    return 1 if str(x).strip().lower() in {"1", "true", "ja", "yes"} else 0
+
 def parse_decision_date(akz: Any) -> str:
     # Aktenzeichen beginnt oft mit YYYY-MM-DD-...
     if akz is None or (isinstance(akz, float) and pd.isna(akz)):
@@ -81,10 +92,15 @@ def main(xlsx_path: str, out_json: str) -> None:
     has_ues_col = COL_UES_ZVT_ZN in df.columns
     has_reg_nb_col = COL_REG_NB in df.columns
     has_orphan_col = COL_ORPHAN in df.columns
+    has_ues_be_col = COL_UES_BE in df.columns
+    has_besond_col = COL_BESOND in df.columns
+    has_ausn_col = COL_AUSN in df.columns
+    has_atmp_col = COL_ATMP in df.columns
+    has_qs_atmp_col = COL_QS_ATMP in df.columns
 
     records: List[Dict[str, Any]] = []
     stats: Dict[str, Dict[str, int]] = defaultdict(
-        lambda: {"total_rows": 0, "has_zvt_rows": 0, "orphan_rows": 0, "orphan_missing_zvt_rows": 0}
+        lambda: {"total_rows": 0, "has_zvt_rows": 0, "orphan_rows": 0, "orphan_missing_zvt_rows": 0, "special_rows": 0, "special_has_zvt_rows": 0}
     )
 
     for _, row in df.iterrows():
@@ -112,11 +128,21 @@ def main(xlsx_path: str, out_json: str) -> None:
         except Exception:
             is_orphan = 0
 
+        is_besond = parse_bool_flag(row.get(COL_BESOND)) if has_besond_col else 0
+        is_ausn   = parse_bool_flag(row.get(COL_AUSN))   if has_ausn_col   else 0
+        is_atmp   = parse_bool_flag(row.get(COL_ATMP))   if has_atmp_col   else 0
+        qs_atmp   = clean_text(row.get(COL_QS_ATMP))     if has_qs_atmp_col else ""
+        ues_be    = clean_text(row.get(COL_UES_BE))       if has_ues_be_col  else ""
+
+        is_special = int(bool(is_orphan or is_besond or is_ausn or is_atmp))
+
         # Stats are collected for ALL rows (before the strict filter below)
         stats[therapy_area]["total_rows"] += 1
         stats[therapy_area]["has_zvt_rows"] += int(has_zvt)
         stats[therapy_area]["orphan_rows"] += int(is_orphan)
         stats[therapy_area]["orphan_missing_zvt_rows"] += int(is_orphan and not has_zvt)
+        stats[therapy_area]["special_rows"] += is_special
+        stats[therapy_area]["special_has_zvt_rows"] += int(is_special and has_zvt)
 
         if not has_zvt:
             continue
@@ -133,6 +159,12 @@ def main(xlsx_path: str, out_json: str) -> None:
             "zvt_text": zvt_text,
             "procedure_type": procedure_type,
             "has_zvt": has_zvt,
+            "ues_be": ues_be,
+            "is_orphan": is_orphan,
+            "is_besond": is_besond,
+            "is_ausn": is_ausn,
+            "is_atmp": is_atmp,
+            "qs_atmp": qs_atmp,
         }
         records.append(rec)
 

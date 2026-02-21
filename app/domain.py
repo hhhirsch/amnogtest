@@ -82,4 +82,6 @@ class CandidateResult:
     confidence: str
     support_cases: int
     references: list[ReferenceItem]
+    support_cases_clean: int = 0
+    support_cases_special: int = 0
 

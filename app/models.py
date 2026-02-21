@@ -109,6 +109,8 @@ class CandidateResult(BaseModel):
     confidence: str
     support_cases: int
     references: list[ReferenceItem]
+    support_cases_clean: int = 0
+    support_cases_special: int = 0
 
     @staticmethod
     def from_domain(x: d.CandidateResult) -> "CandidateResult":
@@ -119,6 +121,8 @@ class CandidateResult(BaseModel):
             confidence=x.confidence,
             support_cases=x.support_cases,
             references=[ReferenceItem.from_domain(r) for r in x.references],
+            support_cases_clean=x.support_cases_clean,
+            support_cases_special=x.support_cases_special,
         )
 
 
