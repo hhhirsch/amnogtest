@@ -12,6 +12,10 @@ from app.shortlist import (
     derive_reliability,
     detect_red_flags,
     apply_domain_penalties,
+    is_menu_zvt,
+    split_zvt_items,
+    comparator_id,
+    MAX_CANDIDATE_KEYS,
 )
 
 
@@ -682,3 +686,181 @@ def test_bsc_contradiction_always_niedrig_with_strong_evidence() -> None:
     )
     assert rel == "niedrig"
     assert any("Best Supportive Care" in r for r in reasons)
+
+
+# ===== Tests for is_menu_zvt() =====
+
+
+def test_is_menu_zvt_physician_discretion() -> None:
+    """Menu markers are detected case-insensitively."""
+    assert is_menu_zvt("nach ärztlicher maßgabe")
+    assert is_menu_zvt("nach arztlicher maßgabe")   # normalized form
+    assert is_menu_zvt("patientenindividuelle therapie")
+    assert is_menu_zvt("unter auswahl von")
+    assert is_menu_zvt("auswahl aus")
+    assert is_menu_zvt("unter berücksichtigung von")
+    assert is_menu_zvt("unter beruecksichtigung von")
+
+
+def test_is_menu_zvt_pit_standalone() -> None:
+    """Standalone 'pit' is a menu-zVT; 'pitavastatin' must not trigger it."""
+    assert is_menu_zvt("pit")
+    assert is_menu_zvt("therapie (pit)")
+    assert not is_menu_zvt("pitavastatin")
+
+
+def test_is_menu_zvt_plain_comparator_is_not_menu() -> None:
+    """Regular comparator texts must not be classified as menu."""
+    assert not is_menu_zvt("paclitaxel")
+    assert not is_menu_zvt("bsc")
+    assert not is_menu_zvt("pembrolizumab oder docetaxel")
+
+
+# ===== Tests for split_zvt_items() =====
+
+
+def test_split_zvt_items_empty_returns_empty() -> None:
+    assert split_zvt_items("") == []
+    assert split_zvt_items("   ") == []
+
+
+def test_split_zvt_items_basic_oder_split() -> None:
+    """'Paclitaxel oder Docetaxel' splits into two mono items (no menu markers)."""
+    items = split_zvt_items("Paclitaxel oder Docetaxel")
+    assert items == ["Paclitaxel", "Docetaxel"]
+
+
+def test_split_zvt_items_semicolon_split() -> None:
+    items = split_zvt_items("Pembrolizumab; Nivolumab")
+    assert items == ["Pembrolizumab", "Nivolumab"]
+
+
+def test_split_zvt_items_slash_split() -> None:
+    items = split_zvt_items("Pembrolizumab / Nivolumab")
+    assert items == ["Pembrolizumab", "Nivolumab"]
+
+
+def test_split_zvt_items_menu_no_split() -> None:
+    """Menu-zVT with 'oder' inside must NOT be split into atoms."""
+    text = "Therapie nach ärztlicher Maßgabe unter Auswahl von X oder Y"
+    result = split_zvt_items(text)
+    assert result == [text]
+
+
+def test_split_zvt_items_pit_no_split() -> None:
+    """PIT texts must not be split."""
+    text = "Patientenindividuelle Therapie (PIT) nach ärztlicher Maßgabe"
+    result = split_zvt_items(text)
+    assert result == [text]
+
+
+def test_split_zvt_items_explosion_guard() -> None:
+    """More than MAX_ZVT_ITEMS_PER_RECORD fragments → return original text."""
+    many = " oder ".join([f"Drug{i}" for i in range(15)])
+    result = split_zvt_items(many)
+    assert result == [many]
+
+
+def test_split_zvt_items_fragmentation_guard() -> None:
+    """>=6 items AND partial menu marker 'auswahl' → return original text."""
+    text = "auswahl: A oder B oder C oder D oder E oder F"
+    result = split_zvt_items(text)
+    assert result == [text]
+
+
+def test_split_zvt_items_no_und_split() -> None:
+    """'und' must NOT be used as a delimiter."""
+    items = split_zvt_items("Capecitabin und Oxaliplatin")
+    assert len(items) == 1
+    assert items[0] == "Capecitabin und Oxaliplatin"
+
+
+# ===== Tests for comparator_id() =====
+
+
+def test_comparator_id_mono() -> None:
+    """Plain drug names get 'mono:' prefix."""
+    assert comparator_id("Paclitaxel") == "mono:paclitaxel"
+    assert comparator_id("Docetaxel") == "mono:docetaxel"
+
+
+def test_comparator_id_passive_bsc() -> None:
+    """BSC variants all map to 'passive:bsc'."""
+    assert comparator_id("Best supportive care") == "passive:bsc"
+    assert comparator_id("BSC") == "passive:bsc"
+    assert comparator_id("B.S.C.") == "passive:bsc"
+
+
+def test_comparator_id_passive_watchful_waiting() -> None:
+    assert comparator_id("watchful waiting") == "passive:watchful_waiting"
+    assert comparator_id("Beobachtendes Abwarten") == "passive:watchful_waiting"
+
+
+def test_comparator_id_menu_pit() -> None:
+    """PIT / patientenindividuelle Therapie → 'menu:pit'."""
+    assert comparator_id("Patientenindividuelle Therapie nach ärztlicher Maßgabe") == "menu:pit"
+    assert comparator_id("PIT") == "menu:pit"
+
+
+def test_comparator_id_menu_arztliche_massgabe() -> None:
+    assert comparator_id("Therapie nach ärztlicher Maßgabe") == "menu:arztliche_massgabe"
+
+
+def test_comparator_id_menu_auswahl() -> None:
+    assert comparator_id("unter Auswahl von Therapie A") == "menu:auswahl"
+
+
+def test_comparator_id_combo() -> None:
+    """Combination therapies get sorted 'combo:' prefix."""
+    cid = comparator_id("Pembrolizumab + Chemotherapie")
+    assert cid.startswith("combo:")
+    parts = cid[len("combo:"):].split("|")
+    assert len(parts) == 2
+    assert parts == sorted(parts)   # components are alphabetically sorted
+
+
+def test_comparator_id_oder_list_produces_two_mono_ids() -> None:
+    """After split_zvt_items, 'Paclitaxel oder Docetaxel' yields two distinct mono IDs."""
+    items = split_zvt_items("Paclitaxel oder Docetaxel")
+    ids = [comparator_id(i) for i in items]
+    assert ids == ["mono:paclitaxel", "mono:docetaxel"]
+
+
+# ===== Test candidate-key budget =====
+
+
+def test_candidate_key_budget(monkeypatch) -> None:
+    """Candidate key budget: a small MAX_CANDIDATE_KEYS cap limits aggregated keys.
+
+    We patch MAX_CANDIDATE_KEYS to 3 and supply 20 distinct records.  Without
+    the budget guard the aggregated dict would grow to 20 entries; with it,
+    only 3 keys are ever created, so shortlist() returns ≤3 candidates.
+    """
+    import app.shortlist as sl
+    monkeypatch.setattr(sl, "MAX_CANDIDATE_KEYS", 3)
+
+    records = tuple(
+        PatientGroupRecord(
+            patient_group_id=f"pg-{i}",
+            decision_id=f"d-{i}",
+            product_name="X",
+            decision_date="2024-01-01",
+            url=f"https://example.org/{i}",
+            therapy_area="Onkologie",
+            awg_text="query token",
+            patient_group_text="query token",
+            zvt_text=f"UniqueDrug{i}",
+        )
+        for i in range(20)
+    )
+    monkeypatch.setattr("app.shortlist.load_records", lambda: records)
+    from app.domain import Setting, ShortlistRequest, TherapyArea, TherapyRole
+    payload = ShortlistRequest(
+        therapy_area=TherapyArea.ONKOLOGIE,
+        indication_text="query token " * 6,
+        setting=Setting.AMBULANT,
+        role=TherapyRole.REPLACEMENT,
+    )
+    candidates, _, _, _ = shortlist(payload)
+    # Budget of 3 keys means at most 3 candidates can ever be returned
+    assert len(candidates) <= 3
