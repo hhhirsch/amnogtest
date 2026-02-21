@@ -180,6 +180,14 @@ class PatientGroupRecord:
     awg_text: str
     patient_group_text: str
     zvt_text: str
+    procedure_type: str = ""
+    has_zvt: bool = True
+    ues_be: str = ""
+    is_orphan: int = 0
+    is_besond: int = 0
+    is_ausn: int = 0
+    is_atmp: int = 0
+    qs_atmp: str = ""
 
     def __post_init__(self) -> None:
         # Cache tokenized fields once at load time to avoid re-tokenizing on every request.
@@ -422,6 +430,19 @@ def recency_weight(decision_date: str) -> float:
     return 0.6
 
 
+def decision_quality_weight(record: PatientGroupRecord) -> float:
+    """Return a downweight factor for special-procedure records.
+
+    Special procedures (Orphan, ATMP, Ausnahme, Besondere Therapierichtungen)
+    tend to have non-standard zVT assignments.  We downweight their contribution
+    to the aggregated support score while still including them for breadth.
+    """
+    if not record.has_zvt:
+        return 0.0
+    is_special = bool(record.is_orphan or record.is_besond or record.is_ausn or record.is_atmp)
+    return 0.35 if is_special else 1.0
+
+
 def normalize_candidate(text: str) -> str:
     cleaned = (text or "").strip().lower()
     cleaned = _WS_RE.sub(" ", cleaned)
@@ -634,7 +655,7 @@ def derive_reliability(
         return "niedrig", ["Kein belastbares Ergebnis gefunden."]
     
     top = candidates[0]
-    cases = top.support_cases or 0
+    cases = top.support_cases_clean or top.support_cases or 0
     conf = top.confidence  # "hoch"|"mittel"|"niedrig"
     
     # signals
@@ -798,6 +819,8 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, li
             "score": 0.0,
             "refs": [],
             "best_by_decision": {},
+            "best_by_decision_clean": {},
+            "best_by_decision_special": {},
             "best_display_score": -1.0,
         }
     )
@@ -828,6 +851,7 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, li
             adj -= 0.1
 
         weighted = base_score * recency_weight(record.decision_date) * adj * area_penalty
+        weighted *= decision_quality_weight(record)
 
         entry = aggregated[candidate_key]
 
@@ -851,6 +875,12 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, li
         if prev is None or weighted > prev:
             entry["best_by_decision"][record.decision_id] = weighted
 
+        is_special = bool(record.is_orphan or record.is_besond or record.is_ausn or record.is_atmp)
+        bucket = "best_by_decision_special" if is_special else "best_by_decision_clean"
+        prev_bucket = entry[bucket].get(record.decision_id)
+        if prev_bucket is None or weighted > prev_bucket:
+            entry[bucket][record.decision_id] = weighted
+
     for entry in aggregated.values():
         entry["score"] = aggregate_score(entry["best_by_decision"])
 
@@ -870,14 +900,20 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, li
     for idx, row in enumerate(ranked, start=1):
         refs = sorted(row["refs"], key=lambda r: r.score, reverse=True)[:5]
         support_cases = len(row["best_by_decision"])
+        support_cases_clean = len(row["best_by_decision_clean"])
+        support_cases_special = len(row["best_by_decision_special"])
         score = float(row["score"])
+        # Use clean cases for confidence label when available (fall back to total)
+        cases_for_conf = support_cases_clean or support_cases
         candidates.append(
             CandidateResult(
                 rank=idx,
                 candidate_text=row["text"],
                 support_score=round(score, 4),
-                confidence=confidence_label(score, top_score, support_cases),
+                confidence=confidence_label(score, top_score, cases_for_conf),
                 support_cases=support_cases,
+                support_cases_clean=support_cases_clean,
+                support_cases_special=support_cases_special,
                 references=refs,
             )
         )
@@ -896,6 +932,13 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, li
                 notices.append(
                     "Für dieses Therapiegebiet liegen viele Orphan-/Sonderverfahren ohne festgelegte zVT vor. "
                     "Ergebnisse basieren auf Analogfällen und können fachfremd sein."
+                )
+            special_rows = area_stats.get("special_rows", 0)
+            special_ratio = special_rows / total if total else 0
+            if special_ratio >= 0.30 and not any("Sonderverfahren" in n for n in notices):
+                notices.append(
+                    "Hinweis: Hoher Sonderverfahren-Anteil in diesem Therapiegebiet – "
+                    "Ergebnisse basieren teilweise auf Orphan- oder ATMP-Entscheidungen."
                 )
         if not use_area_corpus:
             notices.append(
