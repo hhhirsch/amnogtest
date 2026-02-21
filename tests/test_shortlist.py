@@ -624,3 +624,61 @@ def test_no_red_flags_strong_evidence_still_hoch() -> None:
         notices=[],
     )
     assert rel == "hoch"
+
+
+# ===== Tests for Watchful Waiting / BSC drift fix =====
+
+
+def test_red_flag_watchful_waiting_contradiction() -> None:
+    """systemtherapiefähig + watchful waiting candidate → BSC_CONTRADICTION flag."""
+    query = "systemtherapiefähig, weitere Standardtherapie möglich"
+    candidate = _make_domain_candidate("watchful waiting")
+    flags = detect_red_flags(query, candidate, TherapyLine.L2)
+    assert "BSC_CONTRADICTION" in flags
+
+
+def test_red_flag_beobachtendes_abwarten_contradiction() -> None:
+    """therapiefähig + beobachtendes Abwarten → BSC_CONTRADICTION flag."""
+    query = "Patient therapiefähig, standardtherapie kommt in frage"
+    candidate = _make_domain_candidate("Beobachtendes Abwarten")
+    flags = detect_red_flags(query, candidate, TherapyLine.L2)
+    assert "BSC_CONTRADICTION" in flags
+
+
+def test_penalty_watchful_waiting_when_therapy_ok() -> None:
+    """Watchful waiting score should drop strongly when systemic therapy suitable."""
+    score = 10.0
+    adjusted = apply_domain_penalties(
+        score,
+        query="systemtherapiefähig, weitere Systemtherapie möglich",
+        candidate_text="watchful waiting",
+        line=TherapyLine.L2,
+    )
+    assert adjusted == pytest.approx(0.5)  # 0.05 penalty → 0.5
+
+
+def test_no_penalty_if_user_requests_passive() -> None:
+    """No BSC penalty when user explicitly requests BSC as comparator type."""
+    score = 10.0
+    # build_query would produce "Comparator-Typ: BSC" in query → _query_requests_passive returns True
+    adjusted = apply_domain_penalties(
+        score,
+        query="weitere Systemtherapie möglich\nComparator-Typ: BSC",
+        candidate_text="bsc",
+        line=TherapyLine.L2,
+    )
+    assert adjusted == score
+
+
+def test_bsc_contradiction_always_niedrig_with_strong_evidence() -> None:
+    """BSC_CONTRADICTION is a hard corridor exit: always 'niedrig' regardless of cases."""
+    candidates = [_make_candidate(support_cases=5, confidence="hoch")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="niedrig",
+        reasons=["BSC_CONTRADICTION"],
+        notices=[],
+    )
+    assert rel == "niedrig"
+    assert any("Best Supportive Care" in r for r in reasons)
