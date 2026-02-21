@@ -67,7 +67,7 @@ def startup() -> None:
 @app.post("/api/shortlist", response_model=ShortlistResponse)
 def create_shortlist(payload: ShortlistRequest) -> ShortlistResponse:
     domain_req = payload.to_domain()
-    domain_candidates, ambiguity, notices = shortlist(domain_req)
+    domain_candidates, ambiguity, notices, reasons = shortlist(domain_req)
 
     run_id = str(uuid4())
     generated_at = datetime.utcnow()
@@ -82,7 +82,7 @@ def create_shortlist(payload: ShortlistRequest) -> ShortlistResponse:
         status=status,
         candidates=candidates,
         ambiguity=ambiguity,
-        reasons=None,  # We don't currently track Quality-Gate reasons
+        reasons=reasons,
         notices=notices,
     )
     

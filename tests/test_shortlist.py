@@ -10,6 +10,8 @@ from app.shortlist import (
     shortlist,
     load_area_stats,
     derive_reliability,
+    detect_red_flags,
+    apply_domain_penalties,
 )
 
 
@@ -66,7 +68,7 @@ def test_shortlist_caps_score_per_decision(monkeypatch) -> None:
         role=TherapyRole.REPLACEMENT,
     )
 
-    candidates, _, _notices = shortlist(payload)
+    candidates, _, _notices, _reasons = shortlist(payload)
 
     assert len(candidates) == 1
     assert candidates[0].support_cases == 1
@@ -110,7 +112,7 @@ def test_notices_disabled_when_flag_off(monkeypatch) -> None:
         setting=Setting.AMBULANT,
         role=TherapyRole.REPLACEMENT,
     )
-    _candidates, _ambiguity, notices = shortlist(payload)
+    _candidates, _ambiguity, notices, _reasons = shortlist(payload)
     assert notices == []
 
 
@@ -127,7 +129,7 @@ def test_notices_enabled_no_stats_file(tmp_path, monkeypatch) -> None:
         setting=Setting.AMBULANT,
         role=TherapyRole.REPLACEMENT,
     )
-    _candidates, _ambiguity, notices = shortlist(payload)
+    _candidates, _ambiguity, notices, _reasons = shortlist(payload)
     # No orphan/Sonderverfahren warning when stats file is absent
     assert not any("Orphan" in n or "Sonderverfahren" in n for n in notices)
     sl.load_area_stats.cache_clear()
@@ -156,7 +158,7 @@ def test_notices_enabled_with_stats_below_threshold(tmp_path, monkeypatch) -> No
         setting=Setting.AMBULANT,
         role=TherapyRole.REPLACEMENT,
     )
-    _candidates, _ambiguity, notices = shortlist(payload)
+    _candidates, _ambiguity, notices, _reasons = shortlist(payload)
     assert len(notices) >= 1
     assert "Orphan" in notices[0] or "Sonderverfahren" in notices[0]
     sl.load_area_stats.cache_clear()
@@ -185,7 +187,7 @@ def test_notices_enabled_with_high_orphan_ratio(tmp_path, monkeypatch) -> None:
         setting=Setting.AMBULANT,
         role=TherapyRole.REPLACEMENT,
     )
-    _candidates, _ambiguity, notices = shortlist(payload)
+    _candidates, _ambiguity, notices, _reasons = shortlist(payload)
     assert len(notices) >= 1
     sl.load_area_stats.cache_clear()
 
@@ -213,7 +215,7 @@ def test_notices_no_warning_when_thresholds_not_met(tmp_path, monkeypatch) -> No
         setting=Setting.AMBULANT,
         role=TherapyRole.REPLACEMENT,
     )
-    _candidates, _ambiguity, notices = shortlist(payload)
+    _candidates, _ambiguity, notices, _reasons = shortlist(payload)
     # No orphan warning should be present (only possible fallback notice)
     orphan_notices = [n for n in notices if "Orphan" in n or "Sonderverfahren" in n]
     assert orphan_notices == []
@@ -431,3 +433,194 @@ def test_derive_reliability_hoch_positive_bullets() -> None:
     assert "Bewertung basiert auf verfügbaren G-BA-Entscheidungen." not in reasons
     assert "5 vergleichbare Entscheidungen stützen die Top-Option." in reasons
     assert "Klare Trennschärfe zwischen Top-Option und Alternativen." in reasons
+
+
+# ===== Tests for detect_red_flags() =====
+
+
+def _make_domain_candidate(candidate_text: str, support_cases: int = 1, confidence: str = "mittel") -> DomainCandidateResult:
+    """Helper to create a domain CandidateResult for red flag testing."""
+    return DomainCandidateResult(
+        rank=1,
+        candidate_text=candidate_text,
+        support_score=1.0,
+        confidence=confidence,
+        support_cases=support_cases,
+        references=[],
+    )
+
+
+def test_red_flag_platin_rechallenge() -> None:
+    """Post-platinum progression + cisplatin comparator → triggers flag."""
+    query = "Progress nach platinbasierter Chemotherapie"
+    candidate = _make_domain_candidate("Cisplatin + 5-Fluorouracil")
+    flags = detect_red_flags(query, candidate, TherapyLine.L2)
+    assert "SETTING_MISMATCH_PLATIN" in flags
+
+
+def test_red_flag_platin_carboplatin() -> None:
+    """Post-platinum progression + carboplatin → triggers flag."""
+    query = "post-platin Progression"
+    candidate = _make_domain_candidate("Carboplatin + Paclitaxel")
+    flags = detect_red_flags(query, candidate, TherapyLine.L2)
+    assert "SETTING_MISMATCH_PLATIN" in flags
+
+
+def test_red_flag_no_platin_mismatch_when_no_post_platin() -> None:
+    """Without post-platin markers, cisplatin should not trigger flag."""
+    query = "Erstlinientherapie bei fortgeschrittenem Zervixkarzinom"
+    candidate = _make_domain_candidate("Cisplatin + Paclitaxel")
+    flags = detect_red_flags(query, candidate, TherapyLine.L1)
+    assert "SETTING_MISMATCH_PLATIN" not in flags
+
+
+def test_red_flag_bsc_contradiction() -> None:
+    """Systemic therapy suitable + BSC → triggers flag."""
+    query = "weitere Systemtherapie möglich, ECOG 0-1"
+    candidate = _make_domain_candidate("Best Supportive Care")
+    flags = detect_red_flags(query, candidate, TherapyLine.L2)
+    assert "BSC_CONTRADICTION" in flags
+
+
+def test_red_flag_no_bsc_contradiction_without_marker() -> None:
+    """Without therapy-suitable markers, BSC should not trigger flag."""
+    query = "Palliative Situation, keine weitere Therapie"
+    candidate = _make_domain_candidate("Best Supportive Care")
+    flags = detect_red_flags(query, candidate, TherapyLine.L2)
+    assert "BSC_CONTRADICTION" not in flags
+
+
+def test_red_flag_line_mismatch_1l() -> None:
+    """First-line + post-progression candidate → triggers flag."""
+    query = "Erstlinientherapie"
+    candidate = _make_domain_candidate("Therapie nach Versagen der Erstlinie")
+    flags = detect_red_flags(query, candidate, TherapyLine.L1)
+    assert "LINE_MISMATCH_1L" in flags
+
+
+def test_red_flag_no_line_mismatch_for_2l() -> None:
+    """Second-line should not trigger LINE_MISMATCH_1L."""
+    query = "Zweitlinientherapie"
+    candidate = _make_domain_candidate("Therapie nach Versagen der Erstlinie")
+    flags = detect_red_flags(query, candidate, TherapyLine.L2)
+    assert "LINE_MISMATCH_1L" not in flags
+
+
+# ===== Tests for apply_domain_penalties() =====
+
+
+def test_penalty_platin_rechallenge() -> None:
+    """Cisplatin score should drop significantly post-platin."""
+    score = 10.0
+    adjusted = apply_domain_penalties(
+        score,
+        query="Progress nach Platin, weitere Systemtherapie",
+        candidate_text="Cisplatin + 5-FU",
+        line=TherapyLine.L2,
+    )
+    assert adjusted < 5.0  # 0.3 penalty → 3.0
+
+
+def test_penalty_bsc_when_therapy_suitable() -> None:
+    """BSC score should drop when systemic therapy suitable."""
+    score = 10.0
+    adjusted = apply_domain_penalties(
+        score,
+        query="weitere Systemtherapie möglich",
+        candidate_text="Best Supportive Care",
+        line=TherapyLine.L2,
+    )
+    assert adjusted < 5.0  # 0.2 penalty → 2.0
+
+
+def test_penalty_no_effect_when_no_mismatch() -> None:
+    """No penalty when there's no mismatch."""
+    score = 10.0
+    adjusted = apply_domain_penalties(
+        score,
+        query="Erstlinientherapie Zervixkarzinom",
+        candidate_text="Pembrolizumab",
+        line=TherapyLine.L1,
+    )
+    assert adjusted == score
+
+
+def test_penalty_first_line_post_progression() -> None:
+    """First-line + post-progression candidate should be penalized."""
+    score = 10.0
+    adjusted = apply_domain_penalties(
+        score,
+        query="Erstlinientherapie",
+        candidate_text="nach Versagen der Erstlinie",
+        line=TherapyLine.L1,
+    )
+    assert adjusted < score  # 0.5 penalty → 5.0
+
+
+def test_penalty_late_line_bsc_boost() -> None:
+    """Late-line + BSC should get a boost."""
+    score = 10.0
+    adjusted = apply_domain_penalties(
+        score,
+        query="Drittlinientherapie",
+        candidate_text="Best Supportive Care",
+        line=TherapyLine.SPAETER,
+    )
+    assert adjusted > score  # 1.5 boost → 15.0
+
+
+# ===== Tests for derive_reliability with red flags =====
+
+
+def test_plausibility_downgrade_with_red_flags() -> None:
+    """Red flags + 2 cases → reliability niedrig."""
+    candidates = [_make_candidate(support_cases=2, confidence="mittel")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="mittel",
+        reasons=["SETTING_MISMATCH_PLATIN"],
+        notices=[],
+    )
+    assert rel == "niedrig"
+    assert any("Platin-Rechallenge" in r for r in reasons)
+
+
+def test_plausibility_downgrade_bsc_contradiction() -> None:
+    """BSC_CONTRADICTION + few cases → reliability niedrig."""
+    candidates = [_make_candidate(support_cases=1, confidence="niedrig")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="niedrig",
+        reasons=["BSC_CONTRADICTION"],
+        notices=[],
+    )
+    assert rel == "niedrig"
+    assert any("Best Supportive Care" in r for r in reasons)
+
+
+def test_red_flags_with_strong_evidence_gives_mittel() -> None:
+    """Red flags + strong evidence (>=3 cases) → mittel (not hoch)."""
+    candidates = [_make_candidate(support_cases=5, confidence="hoch")]
+    rel, _ = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="niedrig",
+        reasons=["SETTING_MISMATCH_PLATIN"],
+        notices=[],
+    )
+    assert rel == "mittel"
+
+
+def test_no_red_flags_strong_evidence_still_hoch() -> None:
+    """Without red flags, strong evidence still produces 'hoch'."""
+    candidates = [_make_candidate(support_cases=5, confidence="hoch")]
+    rel, _ = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="niedrig",
+        reasons=[],
+        notices=[],
+    )
+    assert rel == "hoch"
