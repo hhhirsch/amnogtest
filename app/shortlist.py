@@ -109,6 +109,26 @@ KEEP_SHORT_TOKENS = {"1l", "2l", "3l", "4l", "5l", "l1", "l2", "l3", "l4", "l5"}
 # Red flag keys for domain-level mismatch detection
 RED_FLAG_KEYS = frozenset({"SETTING_MISMATCH_PLATIN", "BSC_CONTRADICTION", "LINE_MISMATCH_1L"})
 
+# Single source of truth for passive-care and therapy-eligible markers
+PASSIVE_CARE_MARKERS = [
+    "bsc", "best supportive care", "supportive care", "symptomatische therapie",
+    "watchful waiting", "beobachtendes abwarten", "abwarten", "abwartend", "abwartendes vorgehen",
+]
+
+THERAPY_OK_MARKERS = [
+    "weitere systemtherapie", "weitere systemische therapie",
+    "systemtherapie geeignet", "systemtherapiefähig", "systemtherapiefaehig",
+    "geeignet für weitere systemische therapie", "geeignet fuer weitere systemische therapie",
+    "standardtherapie kommt in frage", "standardtherapie möglich", "standardtherapie moeglich",
+    "therapiefähig", "therapiefaehig",
+    "geeignet für therapie",
+]
+
+
+def _query_requests_passive(query_lower: str) -> bool:
+    """Return True when the user explicitly requested passive/supportive care as comparator."""
+    return any(x in query_lower for x in ["bsc", "watchful waiting", "abwarten", "beobachtendes abwarten"])
+
 
 def _normalize_for_tokens(text: str) -> str:
     """Lightweight normalization to improve lexical matching.
@@ -449,16 +469,11 @@ def detect_red_flags(
         if any(d in candidate_text for d in platin_drugs):
             flags.append("SETTING_MISMATCH_PLATIN")
 
-    # Rule 2: Systemic therapy suitable → BSC unlikely top choice
-    therapy_suitable_markers = [
-        "weitere systemtherapie", "geeignet für therapie",
-        "standardtherapie kommt in frage",
-    ]
-    bsc_markers = ["best supportive care", "bsc", "symptomatische therapie"]
-
-    if any(m in query_lower for m in therapy_suitable_markers):
-        if any(b in candidate_text for b in bsc_markers):
-            flags.append("BSC_CONTRADICTION")
+    # Rule 2: Systemic therapy suitable → BSC / watchful waiting unlikely top choice
+    if any(m in query_lower for m in THERAPY_OK_MARKERS):
+        if any(b in candidate_text for b in PASSIVE_CARE_MARKERS):
+            if not _query_requests_passive(query_lower):
+                flags.append("BSC_CONTRADICTION")
 
     # Rule 3: First-line → no post-progression options
     if line and line.value == "1L":
@@ -495,15 +510,11 @@ def apply_domain_penalties(
     if post_platin and has_platin:
         penalty *= 0.3
 
-    # Penalty 2: Systemic therapy suitable + BSC
-    therapy_ok = any(x in query_lower for x in [
-        "weitere systemtherapie", "geeignet für therapie",
-    ])
-    is_bsc = any(x in candidate_lower for x in [
-        "best supportive care", "bsc", "symptomatische therapie",
-    ])
-    if therapy_ok and is_bsc:
-        penalty *= 0.2
+    # Penalty 2: Systemic therapy suitable + passive care (BSC, watchful waiting, etc.)
+    therapy_ok = any(x in query_lower for x in THERAPY_OK_MARKERS)
+    is_passive = any(x in candidate_lower for x in PASSIVE_CARE_MARKERS)
+    if therapy_ok and is_passive and not _query_requests_passive(query_lower):
+        penalty *= 0.05
 
     # Penalty 3: First-line + post-progression options
     if line and line.value == "1L":
@@ -515,7 +526,7 @@ def apply_domain_penalties(
 
     # Boost 4: Late-line + BSC (BSC becomes more likely in 3L+)
     if line and line.value == "später":
-        if is_bsc or "ärztliche maßgabe" in candidate_lower:
+        if is_passive or "ärztliche maßgabe" in candidate_lower:
             penalty *= 1.5
 
     return score * penalty
@@ -643,8 +654,11 @@ def derive_reliability(
     weak_evid = cases <= 1
     
     # ── Reliability decision ──
+    # NIEDRIG: BSC_CONTRADICTION is a hard corridor exit (always unreliable)
+    if "BSC_CONTRADICTION" in red_flags:
+        rel = "niedrig"
     # NIEDRIG: Red flags + low evidence → critically unreliable
-    if red_flags and cases <= 2:
+    elif red_flags and cases <= 2:
         rel = "niedrig"
     # NIEDRIG: Blocker / kritisch
     elif "TOO_GENERIC" in (reasons or []):
