@@ -145,7 +145,10 @@ THERAPY_OK_MARKERS = [
 ]
 
 # Prefixes that mark modifier-only zVT fragments (e.g. "ohne Prednison")
-_FRAG_PREFIXES = ("ohne ", "mit ", "unter ", "für ", "nur ", "inkl ", "inkl. ", "zzgl ", "zzgl. ")
+_FRAG_PREFIXES = ("ohne ", "mit ", "unter ", "für ", "nur ", "bei ", "inkl ", "inkl. ", "zzgl ", "zzgl. ")
+
+# Prefixes that are always dropped regardless of token count (qualifier-only phrases)
+_HARD_DROP_PREFIXES = ("nur für ",)
 
 
 def _query_requests_passive(query_lower: str, comparator_type_value: str | None = None) -> bool:
@@ -537,7 +540,10 @@ _MENU_MARKERS = [
     "nach arztlicher maßgabe",   # normalized form (ä → a)
     "patientenindividuelle therapie",
     "unter auswahl von",
+    "unter der auswahl",
+    "unter auswahl",
     "auswahl aus",
+    "in abhängigkeit",
     "unter berücksichtigung von",
     "unter beruecksichtigung von",
 ]
@@ -562,14 +568,20 @@ def split_zvt_items(zvt_text: str) -> list[str]:
     Rules:
     - Empty input → [].
     - Menu-zVT (physician's choice / PIT) → [zvt_text] (no splitting).
+    - Combo-context (contains "in kombination mit" / "zusammen mit"):
+      only split on line breaks and semicolons to preserve the combo head.
     - Otherwise split on: line-breaks, semicolons, " oder ", " / ".
     - DO NOT split on "und".
     - Explosion guard: >MAX_ZVT_ITEMS_PER_RECORD items → [zvt_text].
     - Fragmentation guard: >=6 items AND partial menu markers → [zvt_text].
+    - Fragment filter: drop modifier-only items (e.g. "ohne Prednison").
+    - Hard-drop filter: items starting with _HARD_DROP_PREFIXES are always removed.
 
     Inline comment tests:
     # split_zvt_items("Paclitaxel oder Docetaxel") == ["Paclitaxel", "Docetaxel"]
     # split_zvt_items("Therapie nach ärztlicher Maßgabe unter Auswahl von X oder Y") == [<original>]
+    # split_zvt_items("Ribociclib in Kombination mit Anastrozol oder Letrozol") == [<original>]
+    # split_zvt_items("Tamoxifen (nur für …); Fulvestrant") does NOT emit "nur für …"
     """
     if not zvt_text or not zvt_text.strip():
         return []
@@ -582,9 +594,17 @@ def split_zvt_items(zvt_text: str) -> list[str]:
 
     text = _WS_RE.sub(" ", zvt_text).strip()
 
-    # Split on newlines, semicolons, " oder " (case-insensitive), " / "
+    # A2: combo-context → only split on newlines and semicolons (preserve combo head)
+    _combo_phrase_re = re.compile(r"in kombination mit|zusammen mit", re.IGNORECASE)
+    has_combo_phrase = bool(_combo_phrase_re.search(zvt_lower))
+
+    if has_combo_phrase:
+        split_patterns = (r"\n", r";")
+    else:
+        split_patterns = (r"\n", r";", r"(?i)\s+oder\s+", r"\s+/\s+")
+
     items: list[str] = [text]
-    for pattern in (r"\n", r";", r"(?i)\s+oder\s+", r"\s+/\s+"):
+    for pattern in split_patterns:
         expanded: list[str] = []
         for it in items:
             expanded.extend(re.split(pattern, it))
@@ -596,10 +616,13 @@ def split_zvt_items(zvt_text: str) -> list[str]:
     if not cleaned:
         return []
 
-    # Fragment guard B1: drop modifier-only items (e.g., "ohne Prednison" as standalone)
+    # A3: Hard-drop filter: always drop items starting with qualifier prefixes
     filtered = []
     for it in cleaned:
         it_lower = it.lower()
+        if any(it_lower.startswith(pfx) for pfx in _HARD_DROP_PREFIXES):
+            continue
+        # Fragment guard B1: drop modifier-only items (e.g., "ohne Prednison" as standalone)
         if any(it_lower.startswith(pfx) for pfx in _FRAG_PREFIXES) and len(WORD_RE.findall(it)) < 4:
             continue
         filtered.append(it)
@@ -652,6 +675,54 @@ def split_zvt_items(zvt_text: str) -> list[str]:
 #    -> Penalty 0.15 applied (strong downweight)
 #    -> Red flag: PASSIVE_TOP1_MISMATCH
 #    -> Reliability: niedrig
+
+
+def expand_combo_items(item: str) -> list[str]:
+    """Expand common G-BA combo phrasing into explicit pairings.
+
+    Handles the pattern "X in Kombination mit Y (A, B, C)" or
+    "X zusammen mit Y (A, B, C)" by producing one entry per parenthetical
+    name: ["X + A", "X + B", "X + C"].
+    If no parenthetical list is present, returns ["X + tail"] as a single combo.
+    If the item contains neither "in Kombination mit" nor "zusammen mit",
+    returns [item] unchanged.
+
+    Note: only the innermost parenthetical group is expanded; nested parentheses
+    are not supported (not needed for standard G-BA phrasing).
+
+    Inline comment tests:
+    # expand_combo_items("Ribociclib in Kombination mit einem Aromatasehemmer (Anastrozol, Letrozol)")
+    #   -> ["Ribociclib + Anastrozol", "Ribociclib + Letrozol"]
+    # expand_combo_items("Ribociclib in Kombination mit Anastrozol")
+    #   -> ["Ribociclib + Anastrozol"]
+    # expand_combo_items("Paclitaxel")
+    #   -> ["Paclitaxel"]
+    """
+    lower = normalize_candidate(item)
+    marker = None
+    for candidate_marker in ("in kombination mit", "zusammen mit"):
+        if candidate_marker in lower:
+            marker = candidate_marker
+            break
+    if marker is None:
+        return [item]
+
+    marker_idx = lower.index(marker)
+    head_text = item[:marker_idx].strip()
+    tail_text = item[marker_idx + len(marker):].strip()
+
+    # Try to find the innermost parenthetical list "(A, B, C)" in the tail.
+    paren_match = re.search(r"\(([^)]+)\)", tail_text)
+    if paren_match:
+        names = [n.strip() for n in paren_match.group(1).split(",") if n.strip()]
+        if names:
+            return [f"{head_text} + {name}" for name in names]
+
+    # No parenthetical: produce a single combo from head + full tail
+    if head_text and tail_text:
+        return [f"{head_text} + {tail_text}"]
+
+    return [item]
 
 
 def comparator_id(item: str) -> str:
@@ -1128,47 +1199,48 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, li
             items = [record.zvt_text]
 
         for item in items:
-            candidate_key = comparator_id(item)
+            for expanded_item in expand_combo_items(item):
+                candidate_key = comparator_id(expanded_item)
 
-            # B3: Skip modifier-only fragments (comparator_id returns "" for them)
-            if not candidate_key:
-                continue
+                # B3: Skip modifier-only fragments (comparator_id returns "" for them)
+                if not candidate_key:
+                    continue
 
-            # Candidate key budget guard (Risk B):
-            # New keys beyond MAX_CANDIDATE_KEYS are silently dropped;
-            # existing keys continue to accumulate evidence.
-            is_new_key = candidate_key not in aggregated
-            if is_new_key and len(created_keys) >= MAX_CANDIDATE_KEYS:
-                continue
-            if is_new_key:
-                created_keys.add(candidate_key)
+                # Candidate key budget guard (Risk B):
+                # New keys beyond MAX_CANDIDATE_KEYS are silently dropped;
+                # existing keys continue to accumulate evidence.
+                is_new_key = candidate_key not in aggregated
+                if is_new_key and len(created_keys) >= MAX_CANDIDATE_KEYS:
+                    continue
+                if is_new_key:
+                    created_keys.add(candidate_key)
 
-            entry = aggregated[candidate_key]
+                entry = aggregated[candidate_key]
 
-            # Use the strongest supporting wording as the display text for this candidate.
-            if weighted > entry["best_display_score"]:
-                entry["text"] = item
-                entry["best_display_score"] = weighted
+                # Use the strongest supporting wording as the display text for this candidate.
+                if weighted > entry["best_display_score"]:
+                    entry["text"] = expanded_item
+                    entry["best_display_score"] = weighted
 
-            entry["refs"].append(
-                ReferenceItem(
-                    decision_id=record.decision_id,
-                    product_name=record.product_name,
-                    decision_date=record.decision_date,
-                    url=record.url,
-                    snippet=(record.patient_group_text or "")[:260],
-                    score=round(weighted, 4),
+                entry["refs"].append(
+                    ReferenceItem(
+                        decision_id=record.decision_id,
+                        product_name=record.product_name,
+                        decision_date=record.decision_date,
+                        url=record.url,
+                        snippet=(record.patient_group_text or "")[:260],
+                        score=round(weighted, 4),
+                    )
                 )
-            )
 
-            prev = entry["best_by_decision"].get(record.decision_id)
-            if prev is None or weighted > prev:
-                entry["best_by_decision"][record.decision_id] = weighted
+                prev = entry["best_by_decision"].get(record.decision_id)
+                if prev is None or weighted > prev:
+                    entry["best_by_decision"][record.decision_id] = weighted
 
-            bucket = "best_by_decision_special" if is_special else "best_by_decision_clean"
-            prev_bucket = entry[bucket].get(record.decision_id)
-            if prev_bucket is None or weighted > prev_bucket:
-                entry[bucket][record.decision_id] = weighted
+                bucket = "best_by_decision_special" if is_special else "best_by_decision_clean"
+                prev_bucket = entry[bucket].get(record.decision_id)
+                if prev_bucket is None or weighted > prev_bucket:
+                    entry[bucket][record.decision_id] = weighted
 
     for entry in aggregated.values():
         entry["score"] = aggregate_score(entry["best_by_decision"])
