@@ -13,9 +13,12 @@ from app.shortlist import (
     detect_red_flags,
     apply_domain_penalties,
     is_menu_zvt,
+    is_passive_candidate_text,
     split_zvt_items,
     comparator_id,
     MAX_CANDIDATE_KEYS,
+    _query_requests_passive,
+    _query_implies_active_intent,
 )
 
 
@@ -864,3 +867,291 @@ def test_candidate_key_budget(monkeypatch) -> None:
     candidates, _, _, _ = shortlist(payload)
     # Budget of 3 keys means at most 3 candidates can ever be returned
     assert len(candidates) <= 3
+
+
+# ===== Tests for new A1 helper functions =====
+
+
+def test_query_requests_passive_bsc_comparator_type() -> None:
+    """'Comparator-Typ: BSC' in query (from build_query) → passive requested."""
+    assert _query_requests_passive("nsclc\ncomparator-typ: bsc")
+
+
+def test_query_requests_passive_explicit_bsc() -> None:
+    """Explicit 'bsc' in query → passive requested."""
+    assert _query_requests_passive("bsc als vergleich")
+
+
+def test_query_requests_passive_watchful_waiting() -> None:
+    assert _query_requests_passive("watchful waiting vergleich")
+
+
+def test_query_requests_passive_abwarten() -> None:
+    assert _query_requests_passive("abwarten")
+
+
+def test_query_requests_passive_false_for_active_query() -> None:
+    """Active oncology query → passive NOT requested."""
+    assert not _query_requests_passive("rezidiviertes mamma-karzinom 2l systemtherapie")
+
+
+def test_query_implies_active_intent_2l_line() -> None:
+    """TherapyLine.L2 implies active intent."""
+    assert _query_implies_active_intent("irgendwas", TherapyLine.L2)
+
+
+def test_query_implies_active_intent_rezidiv_lexical() -> None:
+    """'rezidiv' in query implies active intent even without line param."""
+    assert _query_implies_active_intent("rezidiviertes mamma-karzinom", None)
+
+
+def test_query_implies_active_intent_progress_marker() -> None:
+    assert _query_implies_active_intent("progress nach vorbehandlung", None)
+
+
+def test_query_implies_active_intent_therapy_ok_marker() -> None:
+    """THERAPY_OK_MARKERS also imply active intent."""
+    assert _query_implies_active_intent("systemtherapiefähig, ecog 0", None)
+
+
+def test_query_implies_active_intent_false_for_passive_query() -> None:
+    """Query without active markers and no late line → no active intent."""
+    assert not _query_implies_active_intent("nsclc diagnose", None)
+
+
+def test_query_implies_active_intent_spaeter_no_lexical() -> None:
+    """TherapyLine.SPAETER alone does NOT imply active intent (preserves Boost 4)."""
+    assert not _query_implies_active_intent("drittlinientherapie", TherapyLine.SPAETER)
+
+
+# ===== Tests for is_passive_candidate_text() =====
+
+
+def test_is_passive_candidate_text_bsc() -> None:
+    assert is_passive_candidate_text("Best Supportive Care")
+    assert is_passive_candidate_text("BSC")
+    assert is_passive_candidate_text("B.S.C.")
+
+
+def test_is_passive_candidate_text_watchful_waiting() -> None:
+    assert is_passive_candidate_text("watchful waiting")
+
+
+def test_is_passive_candidate_text_beobachtendes_abwarten() -> None:
+    # normalize_candidate converts "beobachtendes abwarten" → "watchful waiting"
+    assert is_passive_candidate_text("Beobachtendes Abwarten")
+
+
+def test_is_passive_candidate_text_pit() -> None:
+    # normalize_candidate converts "patientenindividuelle therapie" → "pit"
+    assert is_passive_candidate_text("Patientenindividuelle Therapie")
+    assert is_passive_candidate_text("PIT")
+
+
+def test_is_passive_candidate_text_arztlicher_massgabe() -> None:
+    # normalize_candidate normalises ärztlicher → arztlicher
+    assert is_passive_candidate_text("nach ärztlicher Maßgabe")
+
+
+def test_is_passive_candidate_text_false_for_active_drug() -> None:
+    assert not is_passive_candidate_text("Paclitaxel")
+    assert not is_passive_candidate_text("Pembrolizumab + Chemotherapie")
+
+
+# ===== Tests for A2: active-intent penalty =====
+
+
+def test_penalty_passive_when_active_intent_2l_line() -> None:
+    """Passive candidate should be penalized for 2L line even without therapy_ok marker."""
+    score = 10.0
+    adjusted = apply_domain_penalties(
+        score,
+        query="Mamma HR+/HER2- Rezidiv",
+        candidate_text="Beobachtendes Abwarten",
+        line=TherapyLine.L2,
+    )
+    assert adjusted < score  # 0.05 penalty
+
+
+def test_penalty_passive_when_active_intent_lexical() -> None:
+    """Passive candidate should be penalized when query has active-intent lexical markers."""
+    score = 10.0
+    adjusted = apply_domain_penalties(
+        score,
+        query="progress nach vorbehandlung",
+        candidate_text="watchful waiting",
+        line=None,
+    )
+    assert adjusted < score
+
+
+def test_no_penalty_passive_for_spaeter_no_lexical_markers() -> None:
+    """SPAETER line without active lexical markers must NOT trigger the passive penalty."""
+    score = 10.0
+    adjusted = apply_domain_penalties(
+        score,
+        query="Drittlinientherapie",
+        candidate_text="Best Supportive Care",
+        line=TherapyLine.SPAETER,
+    )
+    # Boost 4 fires (1.5x); no Penalty 2
+    assert adjusted > score
+
+
+# ===== Tests for A3: PASSIVE_TOP1_MISMATCH red flag =====
+
+
+def test_red_flag_passive_top1_mismatch_2l_rezidiv() -> None:
+    """Active intent (2L line) + passive top candidate → PASSIVE_TOP1_MISMATCH."""
+    query = "Mamma HR+/HER2- Rezidiv"
+    candidate = _make_domain_candidate("Beobachtendes Abwarten")
+    flags = detect_red_flags(query, candidate, TherapyLine.L2)
+    assert "PASSIVE_TOP1_MISMATCH" in flags
+
+
+def test_red_flag_passive_top1_mismatch_progress_marker() -> None:
+    """Active intent (progress lexical) + passive candidate → PASSIVE_TOP1_MISMATCH."""
+    query = "progress nach erstlinie"
+    candidate = _make_domain_candidate("Best Supportive Care")
+    flags = detect_red_flags(query, candidate, None)
+    assert "PASSIVE_TOP1_MISMATCH" in flags
+
+
+def test_no_passive_top1_mismatch_when_passive_requested() -> None:
+    """No PASSIVE_TOP1_MISMATCH when BSC is explicitly requested."""
+    query = "rezidiv\ncomparator-typ: bsc"
+    candidate = _make_domain_candidate("BSC")
+    flags = detect_red_flags(query, candidate, TherapyLine.L2)
+    assert "PASSIVE_TOP1_MISMATCH" not in flags
+
+
+def test_no_passive_top1_mismatch_for_active_candidate() -> None:
+    """No PASSIVE_TOP1_MISMATCH when candidate is an active drug."""
+    query = "rezidiviertes NSCLC 2L"
+    candidate = _make_domain_candidate("Docetaxel")
+    flags = detect_red_flags(query, candidate, TherapyLine.L2)
+    assert "PASSIVE_TOP1_MISMATCH" not in flags
+
+
+def test_derive_reliability_passive_top1_mismatch_always_niedrig() -> None:
+    """PASSIVE_TOP1_MISMATCH is a hard corridor exit → always 'niedrig'."""
+    candidates = [_make_candidate(support_cases=5, confidence="hoch")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="niedrig",
+        reasons=["PASSIVE_TOP1_MISMATCH"],
+        notices=[],
+    )
+    assert rel == "niedrig"
+    assert any("passiv" in r.lower() or "BSC" in r or "Abwarten" in r for r in reasons)
+
+
+def test_derive_reliability_passive_top1_mismatch_reason_text() -> None:
+    """PASSIVE_TOP1_MISMATCH produces expected German reason text."""
+    candidates = [_make_candidate(support_cases=3, confidence="hoch")]
+    rel, reasons = derive_reliability(
+        status="ok",
+        candidates=candidates,
+        ambiguity="niedrig",
+        reasons=["PASSIVE_TOP1_MISMATCH"],
+        notices=[],
+    )
+    assert any("passiv" in r.lower() for r in reasons)
+
+
+# ===== Tests for B1: split_zvt_items fragment guard =====
+
+
+def test_split_zvt_items_drops_ohne_fragment() -> None:
+    """'ohne Prednison' split fragment (starts with 'ohne ', <4 tokens) is dropped."""
+    items = split_zvt_items("Docetaxel oder ohne Prednison")
+    assert "ohne Prednison" not in items
+    assert "Docetaxel" in items
+
+
+def test_split_zvt_items_keeps_ohne_with_enough_tokens() -> None:
+    """'ohne X Y Z W' (4+ tokens) is NOT dropped (might be a valid item)."""
+    items = split_zvt_items("Chemotherapie oder ohne Prednison Ersatz Backup Fallback")
+    # 'ohne Prednison Ersatz Backup Fallback' has 5 tokens → kept
+    assert any("ohne" in it.lower() for it in items)
+
+
+def test_split_zvt_items_drops_mit_fragment() -> None:
+    """'mit BSC' (starts with 'mit ', only 2 tokens) is dropped."""
+    items = split_zvt_items("Paclitaxel oder mit BSC")
+    assert not any(it.strip().lower() == "mit bsc" for it in items)
+
+
+# ===== Tests for B2: comparator_id returns "" for modifier-only fragments =====
+
+
+def test_comparator_id_ohne_fragment_returns_empty() -> None:
+    """'ohne Prednison' → '' (not a valid standalone comparator)."""
+    assert comparator_id("ohne Prednison") == ""
+
+
+def test_comparator_id_mit_fragment_returns_empty() -> None:
+    """'mit BSC' → '' (modifier-only, < 4 tokens)."""
+    assert comparator_id("mit BSC") == ""
+
+
+def test_comparator_id_unter_fragment_returns_empty() -> None:
+    """'unter Auswahl' → '' (only 2 tokens, starts with 'unter ')."""
+    assert comparator_id("unter Kortison") == ""
+
+
+def test_comparator_id_ohne_with_enough_tokens_not_empty() -> None:
+    """'ohne Prednison Ersatz Backup Fallback' (5 tokens) → not empty."""
+    cid = comparator_id("ohne Prednison Ersatz Backup Fallback")
+    assert cid != ""
+
+
+def test_comparator_id_normal_drug_not_affected() -> None:
+    """Regular drug names are unaffected by fragment guard."""
+    assert comparator_id("Paclitaxel") == "mono:paclitaxel"
+    assert comparator_id("Best supportive care") == "passive:bsc"
+
+
+# ===== Tests for B3: aggregation skips empty candidate_key =====
+
+
+def test_aggregation_skips_ohne_fragment(monkeypatch) -> None:
+    """Records whose only zVT item is a modifier-only fragment produce no candidate."""
+    records = (
+        PatientGroupRecord(
+            patient_group_id="pg-1",
+            decision_id="d-1",
+            product_name="A",
+            decision_date="2025-01-01",
+            url="https://example.org/1",
+            therapy_area="Onkologie",
+            awg_text="query token",
+            patient_group_text="query token",
+            zvt_text="ohne Prednison",
+        ),
+        PatientGroupRecord(
+            patient_group_id="pg-2",
+            decision_id="d-2",
+            product_name="B",
+            decision_date="2025-01-01",
+            url="https://example.org/2",
+            therapy_area="Onkologie",
+            awg_text="query token",
+            patient_group_text="query token",
+            zvt_text="Paclitaxel",
+        ),
+    )
+    monkeypatch.setattr("app.shortlist.load_records", lambda: records)
+    payload = ShortlistRequest(
+        therapy_area=TherapyArea.ONKOLOGIE,
+        indication_text="query token " * 6,
+        setting=Setting.AMBULANT,
+        role=TherapyRole.REPLACEMENT,
+    )
+    candidates, _, _, _ = shortlist(payload)
+    # "ohne Prednison" should not appear as a candidate
+    texts = [c.candidate_text.lower() for c in candidates]
+    assert not any("ohne" in t for t in texts)
+    # "Paclitaxel" should still appear
+    assert any("paclitaxel" in t for t in texts)
