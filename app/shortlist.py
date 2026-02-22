@@ -631,7 +631,8 @@ def split_zvt_items(zvt_text: str) -> list[str]:
 # 2. Real alternatives:
 #    "Pembrolizumab oder Nivolumab"
 #    -> split_zvt_items returns: ["Pembrolizumab", "Nivolumab"] (split)
-#    -> comparator_id returns: ["mono:pembrolizumab", "mono:nivolumab"]
+#    -> comparator_id("Pembrolizumab") returns: "mono:pembrolizumab"
+#    -> comparator_id("Nivolumab") returns: "mono:nivolumab"
 #
 # 3. Combination therapy:
 #    "Paclitaxel + Carboplatin" == "Carboplatin + Paclitaxel"
