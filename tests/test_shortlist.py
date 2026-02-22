@@ -1,3 +1,4 @@
+import math
 import pytest
 import json
 from app.domain import ComparatorType, Setting, ShortlistRequest, TherapyArea, TherapyLine, TherapyRole, CandidateResult as DomainCandidateResult, ReferenceItem as DomainReferenceItem
@@ -7,6 +8,7 @@ from app.shortlist import (
     build_query,
     normalize_candidate,
     recency_weight,
+    decision_quality_weight,
     shortlist,
     load_area_stats,
     derive_reliability,
@@ -41,6 +43,7 @@ def test_normalize_candidate_physician_wording_stable() -> None:
 
 
 def test_shortlist_caps_score_per_decision(monkeypatch) -> None:
+    import app.shortlist as sl
     records = (
         PatientGroupRecord(
             patient_group_id="pg-1",
@@ -67,6 +70,11 @@ def test_shortlist_caps_score_per_decision(monkeypatch) -> None:
     )
 
     monkeypatch.setattr("app.shortlist.load_records", lambda: records)
+    sl.load_records_for_area.cache_clear()
+    sl.get_idf_for_area.cache_clear()
+    sl.get_bm25_stats_for_area.cache_clear()
+    sl.get_global_bm25_stats.cache_clear()
+    sl.get_global_idf.cache_clear()
 
     payload = ShortlistRequest(
         therapy_area=TherapyArea.ONKOLOGIE,
@@ -79,8 +87,12 @@ def test_shortlist_caps_score_per_decision(monkeypatch) -> None:
 
     assert len(candidates) == 1
     assert candidates[0].support_cases == 1
+    # aggregate_score applies a log-based coverage bonus on top of the best
+    # per-decision score, so support_score >= max(ref.score).
+    max_ref = max(ref.score for ref in candidates[0].references)
+    assert candidates[0].support_score >= max_ref
     assert candidates[0].support_score == pytest.approx(
-        max(ref.score for ref in candidates[0].references), rel=1e-4
+        max_ref * (1 + math.log(2) * 0.15), rel=1e-3
     )
 
 
@@ -661,7 +673,7 @@ def test_penalty_watchful_waiting_when_therapy_ok() -> None:
         candidate_text="watchful waiting",
         line=TherapyLine.L2,
     )
-    assert adjusted == pytest.approx(0.5)  # 0.05 penalty → 0.5
+    assert adjusted == pytest.approx(1.5)  # 0.15 penalty → 1.5
 
 
 def test_no_penalty_if_user_requests_passive() -> None:
@@ -857,6 +869,11 @@ def test_candidate_key_budget(monkeypatch) -> None:
         for i in range(20)
     )
     monkeypatch.setattr("app.shortlist.load_records", lambda: records)
+    sl.load_records_for_area.cache_clear()
+    sl.get_idf_for_area.cache_clear()
+    sl.get_bm25_stats_for_area.cache_clear()
+    sl.get_global_bm25_stats.cache_clear()
+    sl.get_global_idf.cache_clear()
     from app.domain import Setting, ShortlistRequest, TherapyArea, TherapyRole
     payload = ShortlistRequest(
         therapy_area=TherapyArea.ONKOLOGIE,
@@ -1118,6 +1135,7 @@ def test_comparator_id_normal_drug_not_affected() -> None:
 
 def test_aggregation_skips_ohne_fragment(monkeypatch) -> None:
     """Records whose only zVT item is a modifier-only fragment produce no candidate."""
+    import app.shortlist as sl
     records = (
         PatientGroupRecord(
             patient_group_id="pg-1",
@@ -1143,6 +1161,11 @@ def test_aggregation_skips_ohne_fragment(monkeypatch) -> None:
         ),
     )
     monkeypatch.setattr("app.shortlist.load_records", lambda: records)
+    sl.load_records_for_area.cache_clear()
+    sl.get_idf_for_area.cache_clear()
+    sl.get_bm25_stats_for_area.cache_clear()
+    sl.get_global_bm25_stats.cache_clear()
+    sl.get_global_idf.cache_clear()
     payload = ShortlistRequest(
         therapy_area=TherapyArea.ONKOLOGIE,
         indication_text="query token " * 6,
@@ -1155,3 +1178,98 @@ def test_aggregation_skips_ohne_fragment(monkeypatch) -> None:
     assert not any("ohne" in t for t in texts)
     # "Paclitaxel" should still appear
     assert any("paclitaxel" in t for t in texts)
+
+
+# ===== Tests for A3: Graduated decision_quality_weight =====
+
+
+def _make_record(**kwargs) -> PatientGroupRecord:
+    """Helper to create a PatientGroupRecord with sensible defaults."""
+    defaults = dict(
+        patient_group_id="pg-1",
+        decision_id="d-1",
+        product_name="X",
+        decision_date="2024-01-01",
+        url="https://example.org/1",
+        therapy_area="Onkologie",
+        awg_text="test",
+        patient_group_text="test",
+        zvt_text="Paclitaxel",
+    )
+    defaults.update(kwargs)
+    return PatientGroupRecord(**defaults)
+
+
+def test_decision_quality_weight_clean_standard() -> None:
+    """Clean standard procedure → weight 1.0."""
+    rec = _make_record()
+    assert decision_quality_weight(rec) == 1.0
+
+
+def test_decision_quality_weight_orphan() -> None:
+    """Orphan decision → weight 0.6."""
+    rec = _make_record(is_orphan=1)
+    assert decision_quality_weight(rec) == 0.6
+
+
+def test_decision_quality_weight_atmp() -> None:
+    """ATMP decision → weight 0.7."""
+    rec = _make_record(is_atmp=1)
+    assert decision_quality_weight(rec) == 0.7
+
+
+def test_decision_quality_weight_ausn() -> None:
+    """Ausnahme decision → weight 0.7."""
+    rec = _make_record(is_ausn=1)
+    assert decision_quality_weight(rec) == 0.7
+
+
+def test_decision_quality_weight_besond() -> None:
+    """Besondere procedure → weight 0.4 (least transferable)."""
+    rec = _make_record(is_besond=1)
+    assert decision_quality_weight(rec) == 0.4
+
+
+def test_decision_quality_weight_no_zvt() -> None:
+    """has_zvt=False → weight 0.0."""
+    rec = _make_record(has_zvt=False)
+    assert decision_quality_weight(rec) == 0.0
+
+
+def test_decision_quality_weight_orphan_takes_priority_over_besond() -> None:
+    """When both orphan and besond are set, orphan weight (0.6) is returned (checked first)."""
+    rec = _make_record(is_orphan=1, is_besond=1)
+    assert decision_quality_weight(rec) == 0.6
+
+
+# ===== Tests for C: comparator_type parameter =====
+
+
+def test_detect_red_flags_bsc_suppressed_by_comparator_type() -> None:
+    """BSC_CONTRADICTION should NOT fire when comparator_type=BSC."""
+    query = "weitere Systemtherapie möglich"
+    candidate = _make_domain_candidate("Best Supportive Care")
+    flags = detect_red_flags(query, candidate, TherapyLine.L2, comparator_type=ComparatorType.BSC)
+    assert "BSC_CONTRADICTION" not in flags
+    assert "PASSIVE_TOP1_MISMATCH" not in flags
+
+
+def test_detect_red_flags_passive_suppressed_by_comparator_type() -> None:
+    """PASSIVE_TOP1_MISMATCH should NOT fire when comparator_type=BSC."""
+    query = "rezidiviertes NSCLC 2L"
+    candidate = _make_domain_candidate("BSC")
+    flags = detect_red_flags(query, candidate, TherapyLine.L2, comparator_type=ComparatorType.BSC)
+    assert "PASSIVE_TOP1_MISMATCH" not in flags
+
+
+def test_apply_domain_penalties_comparator_type_bsc_no_penalty() -> None:
+    """No passive penalty when comparator_type=BSC explicitly requests passive care."""
+    score = 10.0
+    adjusted = apply_domain_penalties(
+        score,
+        query="weitere Systemtherapie möglich",
+        candidate_text="Best Supportive Care",
+        line=TherapyLine.L2,
+        comparator_type=ComparatorType.BSC,
+    )
+    assert adjusted == score

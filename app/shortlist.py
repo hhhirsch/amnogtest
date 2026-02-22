@@ -12,7 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Mapping, Optional
 
-from app.domain import CandidateResult, ReferenceItem, ShortlistRequest, TherapyLine
+from app.domain import CandidateResult, ComparatorType, ReferenceItem, ShortlistRequest, TherapyLine
 
 logger = logging.getLogger(__name__)
 
@@ -148,8 +148,12 @@ THERAPY_OK_MARKERS = [
 _FRAG_PREFIXES = ("ohne ", "mit ", "unter ", "für ", "nur ", "inkl ", "inkl. ", "zzgl ", "zzgl. ")
 
 
-def _query_requests_passive(query_lower: str) -> bool:
+def _query_requests_passive(query_lower: str, comparator_type_value: str | None = None) -> bool:
     """Return True when the user explicitly requested passive/supportive care as comparator."""
+    # Explicit comparator_type BSC
+    if comparator_type_value and comparator_type_value.lower() == "bsc":
+        return True
+
     q_norm = _normalize_for_tokens(query_lower)
     return any(x in q_norm for x in PASSIVE_REQUEST_MARKERS)
 
@@ -478,16 +482,34 @@ def recency_weight(decision_date: str) -> float:
 
 
 def decision_quality_weight(record: PatientGroupRecord) -> float:
-    """Return a downweight factor for special-procedure records.
+    """Return evidence weight based on decision type.
 
-    Special procedures (Orphan, ATMP, Ausnahme, Besondere Therapierichtungen)
-    tend to have non-standard zVT assignments.  We downweight their contribution
-    to the aggregated support score while still including them for breadth.
+    Special procedures (Orphan/ATMP/Ausnahme/Besondere) are less generalizable
+    to standard indications, so we downweight them while still including them
+    as supporting evidence.
+
+    Returns:
+        1.0 for clean standard procedures
+        0.4-0.7 for special procedures (graduated by type)
+        0.0 if has_zvt is False
     """
     if not record.has_zvt:
         return 0.0
-    is_special = bool(record.is_orphan or record.is_besond or record.is_ausn or record.is_atmp)
-    return 0.35 if is_special else 1.0
+
+    # Graduated penalties by special procedure type
+    # (Orphan decisions often still have valid zVT logic for small populations)
+    if record.is_orphan:
+        return 0.6
+
+    # ATMP/Ausnahme typically still follow standard zVT principles
+    if record.is_atmp or record.is_ausn:
+        return 0.7
+
+    # "Besondere" procedures least transferable
+    if record.is_besond:
+        return 0.4
+
+    return 1.0  # Clean standard procedure
 
 
 def normalize_candidate(text: str) -> str:
@@ -600,6 +622,38 @@ def split_zvt_items(zvt_text: str) -> list[str]:
     return cleaned
 
 
+# Validation test cases (inline comments):
+# 1. Menu detection:
+#    "Therapie nach ärztlicher Maßgabe unter Auswahl von X oder Y"
+#    -> split_zvt_items returns: ["Therapie nach ärztlicher Maßgabe ..."] (no split)
+#    -> comparator_id returns: "menu:arztliche_massgabe"
+#
+# 2. Real alternatives:
+#    "Pembrolizumab oder Nivolumab"
+#    -> split_zvt_items returns: ["Pembrolizumab", "Nivolumab"] (split)
+#    -> comparator_id("Pembrolizumab") returns: "mono:pembrolizumab"
+#    -> comparator_id("Nivolumab") returns: "mono:nivolumab"
+#
+# 3. Combination therapy:
+#    "Paclitaxel + Carboplatin" == "Carboplatin + Paclitaxel"
+#    -> comparator_id returns: "combo:carboplatin|paclitaxel" (canonical)
+#
+# 4. Fragment filtering:
+#    "Paclitaxel ohne Prednison oder Docetaxel"
+#    -> split_zvt_items returns: ["Paclitaxel", "Docetaxel"] ("ohne Prednison" filtered)
+#
+# 5. Passive care:
+#    "Best Supportive Care (BSC)"
+#    -> comparator_id returns: "passive:bsc"
+#
+# 6. Active intent penalty:
+#    Query: "Rezidiviertes NSCLC nach Platin (2L), therapiefähig"
+#    Top candidate: "Best Supportive Care"
+#    -> Penalty 0.15 applied (strong downweight)
+#    -> Red flag: PASSIVE_TOP1_MISMATCH
+#    -> Reliability: niedrig
+
+
 def comparator_id(item: str) -> str:
     """Return a canonical comparator ID for a single zVT item.
 
@@ -658,6 +712,7 @@ def detect_red_flags(
     query: str,
     top_candidate: CandidateResult,
     line: Optional[TherapyLine],
+    comparator_type: Optional["ComparatorType"] = None,
 ) -> list[str]:
     """Detect obvious mismatches between query and top result.
 
@@ -667,6 +722,7 @@ def detect_red_flags(
     flags: list[str] = []
     query_lower = query.lower()
     candidate_text = top_candidate.candidate_text.lower()
+    comparator_type_value = comparator_type.value if comparator_type else None
 
     # Rule 1: Post-platinum progression → platinum rechallenge unlikely
     post_platin_markers = [
@@ -682,7 +738,7 @@ def detect_red_flags(
     # Rule 2: Systemic therapy suitable → BSC / watchful waiting unlikely top choice
     if any(m in query_lower for m in THERAPY_OK_MARKERS):
         if is_passive_candidate_text(candidate_text):
-            if not _query_requests_passive(query_lower):
+            if not _query_requests_passive(query_lower, comparator_type_value):
                 flags.append("BSC_CONTRADICTION")
 
     # Rule 3: First-line → no post-progression options
@@ -693,7 +749,7 @@ def detect_red_flags(
 
     # Rule 4: Active treatment intent → passive top comparator is suspicious
     if _query_implies_active_intent(query_lower, line):
-        if not _query_requests_passive(query_lower):
+        if not _query_requests_passive(query_lower, comparator_type_value):
             if is_passive_candidate_text(candidate_text):
                 flags.append("PASSIVE_TOP1_MISMATCH")
 
@@ -705,6 +761,7 @@ def apply_domain_penalties(
     query: str,
     candidate_text: str,
     line: Optional[TherapyLine],
+    comparator_type: Optional["ComparatorType"] = None,
 ) -> float:
     """Apply soft penalties for clinically implausible matches.
 
@@ -727,12 +784,18 @@ def apply_domain_penalties(
         penalty *= 0.3
 
     # Penalty 2: Passive comparator in an active-intent context
+    comparator_type_value = comparator_type.value if comparator_type else None
+    line_value = line.value if line else None
     is_passive = is_passive_candidate_text(candidate_text)
-    if is_passive and not _query_requests_passive(query_lower):
-        therapy_ok = any(x in query_lower for x in THERAPY_OK_MARKERS)
-        active_intent = _query_implies_active_intent(query_lower, line)
-        if therapy_ok or active_intent:
-            penalty *= 0.05
+    passive_requested = _query_requests_passive(query_lower, comparator_type_value)
+    active_intent = _query_implies_active_intent(query_lower, line)
+
+    if active_intent and not passive_requested and is_passive:
+        # Late-line (3L+): passive is more legitimate despite active intent
+        if line_value and line_value in ("3L", "4L+", "später"):
+            penalty *= 0.5  # Moderate downweight
+        else:
+            penalty *= 0.15  # Strong downweight (not eliminative)
 
     # Penalty 3: First-line + post-progression options
     if line and line.value == "1L":
@@ -1179,6 +1242,7 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, li
             query=query,
             top_candidate=candidates[0],
             line=payload.line,
+            comparator_type=payload.comparator_type,
         )
         reasons.extend(red_flags)
 
