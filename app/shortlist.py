@@ -112,12 +112,27 @@ STOPWORDS: set[str] = {
 KEEP_SHORT_TOKENS = {"1l", "2l", "3l", "4l", "5l", "l1", "l2", "l3", "l4", "l5"}
 
 # Red flag keys for domain-level mismatch detection
-RED_FLAG_KEYS = frozenset({"SETTING_MISMATCH_PLATIN", "BSC_CONTRADICTION", "LINE_MISMATCH_1L"})
+RED_FLAG_KEYS = frozenset({
+    "SETTING_MISMATCH_PLATIN", "BSC_CONTRADICTION", "LINE_MISMATCH_1L", "PASSIVE_TOP1_MISMATCH",
+})
 
 # Single source of truth for passive-care and therapy-eligible markers
 PASSIVE_CARE_MARKERS = [
     "bsc", "best supportive care", "supportive care", "symptomatische therapie",
     "watchful waiting", "beobachtendes abwarten", "abwarten", "abwartend", "abwartendes vorgehen",
+    "nach arztlicher maßgabe", "arztlicher maßgabe", "patientenindividuelle therapie", "pit",
+]
+
+# Markers indicating the user *explicitly* requested passive/supportive care
+PASSIVE_REQUEST_MARKERS = [
+    "bsc", "best supportive care", "watchful waiting", "beobachtendes abwarten", "abwarten",
+    "nach arztlicher maßgabe", "patientenindividuelle therapie", "pit",
+]
+
+# Markers implying active treatment intent (cross-indication)
+ACTIVE_INTENT_MARKERS = [
+    "rezidiv", "rezidivier", "refrakt", "progress", "metastas", "vorbehandelt",
+    "nach versagen", "salvage", "second line", "2l", "3l", "4l",
 ]
 
 THERAPY_OK_MARKERS = [
@@ -129,10 +144,37 @@ THERAPY_OK_MARKERS = [
     "geeignet für therapie",
 ]
 
+# Prefixes that mark modifier-only zVT fragments (e.g. "ohne Prednison")
+_FRAG_PREFIXES = ("ohne ", "mit ", "unter ", "für ", "nur ", "inkl ", "inkl. ", "zzgl ", "zzgl. ")
+
 
 def _query_requests_passive(query_lower: str) -> bool:
     """Return True when the user explicitly requested passive/supportive care as comparator."""
-    return any(x in query_lower for x in ["bsc", "watchful waiting", "abwarten", "beobachtendes abwarten"])
+    q_norm = _normalize_for_tokens(query_lower)
+    return any(x in q_norm for x in PASSIVE_REQUEST_MARKERS)
+
+
+def _query_implies_active_intent(query_lower: str, line: Optional[TherapyLine] = None) -> bool:
+    """Return True when the query/context implies active treatment intent.
+
+    TherapyLine.SPAETER ("später") is intentionally excluded from the line-based
+    check so that Boost 4 (BSC appropriate in late-line) operates correctly.
+    """
+    if line and line.value == "2L":
+        return True
+    return (
+        any(m in query_lower for m in ACTIVE_INTENT_MARKERS)
+        or any(m in query_lower for m in THERAPY_OK_MARKERS)
+    )
+
+
+def is_passive_candidate_text(candidate_text: str) -> bool:
+    """Return True if the candidate text describes a passive care option.
+
+    Normalizes via normalize_candidate() to handle umlaut variants and abbreviations.
+    """
+    norm = normalize_candidate(candidate_text)
+    return any(m in norm for m in PASSIVE_CARE_MARKERS)
 
 
 def _normalize_for_tokens(text: str) -> str:
@@ -532,6 +574,18 @@ def split_zvt_items(zvt_text: str) -> list[str]:
     if not cleaned:
         return []
 
+    # Fragment guard B1: drop modifier-only items (e.g., "ohne Prednison" as standalone)
+    filtered = []
+    for it in cleaned:
+        it_lower = it.lower()
+        if any(it_lower.startswith(pfx) for pfx in _FRAG_PREFIXES) and len(WORD_RE.findall(it)) < 4:
+            continue
+        filtered.append(it)
+    cleaned = filtered
+
+    if not cleaned:
+        return []
+
     # Explosion guard: too many fragments → treat as single unstructured text
     if len(cleaned) > MAX_ZVT_ITEMS_PER_RECORD:
         return [zvt_text]
@@ -564,6 +618,10 @@ def comparator_id(item: str) -> str:
     """
     norm = normalize_candidate(item)
     norm_lower = norm.lower()
+
+    # B2: Modifier-only fragments (e.g., "ohne Prednison") are not standalone comparators
+    if any(norm_lower.startswith(pfx) for pfx in _FRAG_PREFIXES) and len(WORD_RE.findall(norm_lower)) < 4:
+        return ""
 
     # Menu / physician's-choice nodes (checked BEFORE passive to avoid misclassifying
     # "BSC nach ärztlicher Maßgabe" as passive)
@@ -623,7 +681,7 @@ def detect_red_flags(
 
     # Rule 2: Systemic therapy suitable → BSC / watchful waiting unlikely top choice
     if any(m in query_lower for m in THERAPY_OK_MARKERS):
-        if any(b in candidate_text for b in PASSIVE_CARE_MARKERS):
+        if is_passive_candidate_text(candidate_text):
             if not _query_requests_passive(query_lower):
                 flags.append("BSC_CONTRADICTION")
 
@@ -632,6 +690,12 @@ def detect_red_flags(
         post_prog_markers = ["nach versagen", "nach progress", "vorbehandelt"]
         if any(m in candidate_text for m in post_prog_markers):
             flags.append("LINE_MISMATCH_1L")
+
+    # Rule 4: Active treatment intent → passive top comparator is suspicious
+    if _query_implies_active_intent(query_lower, line):
+        if not _query_requests_passive(query_lower):
+            if is_passive_candidate_text(candidate_text):
+                flags.append("PASSIVE_TOP1_MISMATCH")
 
     return flags
 
@@ -662,11 +726,13 @@ def apply_domain_penalties(
     if post_platin and has_platin:
         penalty *= 0.3
 
-    # Penalty 2: Systemic therapy suitable + passive care (BSC, watchful waiting, etc.)
-    therapy_ok = any(x in query_lower for x in THERAPY_OK_MARKERS)
-    is_passive = any(x in candidate_lower for x in PASSIVE_CARE_MARKERS)
-    if therapy_ok and is_passive and not _query_requests_passive(query_lower):
-        penalty *= 0.05
+    # Penalty 2: Passive comparator in an active-intent context
+    is_passive = is_passive_candidate_text(candidate_text)
+    if is_passive and not _query_requests_passive(query_lower):
+        therapy_ok = any(x in query_lower for x in THERAPY_OK_MARKERS)
+        active_intent = _query_implies_active_intent(query_lower, line)
+        if therapy_ok or active_intent:
+            penalty *= 0.05
 
     # Penalty 3: First-line + post-progression options
     if line and line.value == "1L":
@@ -806,8 +872,8 @@ def derive_reliability(
     weak_evid = cases <= 1
     
     # ── Reliability decision ──
-    # NIEDRIG: BSC_CONTRADICTION is a hard corridor exit (always unreliable)
-    if "BSC_CONTRADICTION" in red_flags:
+    # NIEDRIG: BSC_CONTRADICTION or PASSIVE_TOP1_MISMATCH are hard corridor exits (always unreliable)
+    if "BSC_CONTRADICTION" in red_flags or "PASSIVE_TOP1_MISMATCH" in red_flags:
         rel = "niedrig"
     # NIEDRIG: Red flags + low evidence → critically unreliable
     elif red_flags and cases <= 2:
@@ -838,6 +904,8 @@ def derive_reliability(
         reason_priority.append(("Best Supportive Care unwahrscheinlich bei therapiefähigen Patienten.", 0))
     if "LINE_MISMATCH_1L" in red_flags:
         reason_priority.append(("Therapielinie stimmt möglicherweise nicht überein.", 0))
+    if "PASSIVE_TOP1_MISMATCH" in red_flags:
+        reason_priority.append(("Top-Comparator wirkt passiv (BSC/Abwarten) trotz aktivem Behandlungskontext.", 0))
     
     # (1) Blocker: zuerst, weil actionable
     if "TOO_GENERIC" in (reasons or []):
@@ -998,6 +1066,10 @@ def shortlist(payload: ShortlistRequest) -> tuple[list[CandidateResult], str, li
 
         for item in items:
             candidate_key = comparator_id(item)
+
+            # B3: Skip modifier-only fragments (comparator_id returns "" for them)
+            if not candidate_key:
+                continue
 
             # Candidate key budget guard (Risk B):
             # New keys beyond MAX_CANDIDATE_KEYS are silently dropped;
