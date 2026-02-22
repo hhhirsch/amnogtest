@@ -905,7 +905,7 @@ def derive_reliability(
     if "LINE_MISMATCH_1L" in red_flags:
         reason_priority.append(("Therapielinie stimmt möglicherweise nicht überein.", 0))
     if "PASSIVE_TOP1_MISMATCH" in red_flags:
-        reason_priority.append(("Top-Comparator wirkt passiv (BSC/Abwarten) trotz aktivem Behandlungskontext.", 0))
+        reason_priority.append(("Top-Comparator wirkt passiv (BSC/Abwarten) trotz aktiven Behandlungskontexts.", 0))
     
     # (1) Blocker: zuerst, weil actionable
     if "TOO_GENERIC" in (reasons or []):
