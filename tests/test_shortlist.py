@@ -17,6 +17,7 @@ from app.shortlist import (
     is_menu_zvt,
     is_passive_candidate_text,
     split_zvt_items,
+    expand_combo_items,
     comparator_id,
     MAX_CANDIDATE_KEYS,
     _query_requests_passive,
@@ -1273,3 +1274,164 @@ def test_apply_domain_penalties_comparator_type_bsc_no_penalty() -> None:
         comparator_type=ComparatorType.BSC,
     )
     assert adjusted == score
+
+
+# ===== Tests for expand_combo_items() (B1) =====
+
+
+def test_expand_combo_items_parenthetical_list() -> None:
+    """'X in Kombination mit Y (A, B)' expands into explicit pairings."""
+    result = expand_combo_items(
+        "Ribociclib in Kombination mit einem nicht-steroidalen Aromatasehemmer (Anastrozol, Letrozol)"
+    )
+    assert result == ["Ribociclib + Anastrozol", "Ribociclib + Letrozol"]
+
+
+def test_expand_combo_items_no_parenthetical_single_combo() -> None:
+    """'X in Kombination mit Y' without parenthetical → single 'X + Y'."""
+    result = expand_combo_items("Ribociclib in Kombination mit Anastrozol")
+    assert result == ["Ribociclib + Anastrozol"]
+
+
+def test_expand_combo_items_no_combo_marker_unchanged() -> None:
+    """Items without 'in Kombination mit' are returned unchanged."""
+    assert expand_combo_items("Paclitaxel") == ["Paclitaxel"]
+    assert expand_combo_items("Carboplatin + Paclitaxel") == ["Carboplatin + Paclitaxel"]
+
+
+def test_expand_combo_items_three_names_in_parenthetical() -> None:
+    """Three names in parenthetical → three separate pairings."""
+    result = expand_combo_items("Palbociclib in Kombination mit Aromatasehemmer (Anastrozol, Letrozol, Exemestan)")
+    assert result == [
+        "Palbociclib + Anastrozol",
+        "Palbociclib + Letrozol",
+        "Palbociclib + Exemestan",
+    ]
+
+
+def test_expand_combo_items_combo_key_order_invariant() -> None:
+    """comparator_id on expanded items is order-invariant."""
+    id1 = comparator_id("Ribociclib + Anastrozol")
+    id2 = comparator_id("Anastrozol + Ribociclib")
+    assert id1 == id2
+    assert id1.startswith("combo:")
+
+
+# ===== Tests for A1: extended menu markers =====
+
+
+def test_is_menu_zvt_unter_auswahl_without_von() -> None:
+    """'unter Auswahl' (without 'von') is also a menu marker."""
+    assert is_menu_zvt("unter auswahl geeigneter substanzen")
+
+
+def test_is_menu_zvt_unter_der_auswahl() -> None:
+    """'unter der Auswahl' is a menu marker."""
+    assert is_menu_zvt("unter der auswahl von a, b oder c")
+
+
+def test_is_menu_zvt_in_abhaengigkeit() -> None:
+    """'in Abhängigkeit' is a menu marker."""
+    assert is_menu_zvt("in abhängigkeit von der vortherapie")
+
+
+# ===== Tests for A2: combo context preservation in split_zvt_items =====
+
+
+def test_split_zvt_items_combo_context_preserves_head_on_slash() -> None:
+    """'/' split is skipped when 'in Kombination mit' is present to preserve the combo head."""
+    items = split_zvt_items("Ribociclib in Kombination mit Anastrozol / Letrozol")
+    # Should NOT split on '/' — the whole text is returned as one item
+    assert len(items) == 1
+    assert "Ribociclib" in items[0]
+
+
+def test_split_zvt_items_combo_context_preserves_head_on_oder() -> None:
+    """'oder' split is skipped when 'in Kombination mit' is present."""
+    items = split_zvt_items("Ribociclib in Kombination mit Anastrozol oder Letrozol")
+    assert len(items) == 1
+    assert "Ribociclib" in items[0]
+
+
+def test_split_zvt_items_combo_context_still_splits_on_semicolon() -> None:
+    """Semicolons are still used as delimiters even in combo context."""
+    items = split_zvt_items(
+        "Ribociclib in Kombination mit Anastrozol; Palbociclib in Kombination mit Letrozol"
+    )
+    assert len(items) == 2
+    assert any("Ribociclib" in it for it in items)
+    assert any("Palbociclib" in it for it in items)
+
+
+def test_split_zvt_items_non_combo_slash_still_splits() -> None:
+    """Non-combo texts still split on '/'."""
+    items = split_zvt_items("Pembrolizumab / Nivolumab")
+    assert items == ["Pembrolizumab", "Nivolumab"]
+
+
+# ===== Tests for A3: "nur für" hard-drop filter =====
+
+
+def test_split_zvt_items_drops_nur_fuer_qualifier() -> None:
+    """Items starting with 'nur für' are always dropped regardless of token count."""
+    items = split_zvt_items(
+        "Tamoxifen; nur für Patientinnen mit HR-positivem und HER2-negativem Mammakarzinom"
+    )
+    assert all("nur für" not in it.lower() for it in items)
+    assert "Tamoxifen" in items
+
+
+def test_split_zvt_items_drops_nur_fuer_long_qualifier() -> None:
+    """Even a long 'nur für' qualifier (many tokens) is dropped."""
+    items = split_zvt_items(
+        "Fulvestrant; nur für Patientinnen mit HR-positivem HER2-negativem Mamma-Karzinom nach Versagen einer antihormonellen Erstlinientherapie"
+    )
+    assert all("nur für" not in it.lower() for it in items)
+    assert "Fulvestrant" in items
+
+
+def test_split_zvt_items_drops_bei_fragment() -> None:
+    """Short items starting with 'bei ' (<4 tokens) are dropped."""
+    items = split_zvt_items("Docetaxel oder bei Progression")
+    assert not any(it.strip().lower().startswith("bei ") and len(it.split()) < 4 for it in items)
+
+
+# ===== Tests for B2: combo expansion in aggregation =====
+
+
+def test_aggregation_expands_combo_items(monkeypatch) -> None:
+    """Records with 'in Kombination mit (A, B)' produce separate combo candidates."""
+    import app.shortlist as sl
+    records = (
+        PatientGroupRecord(
+            patient_group_id="pg-1",
+            decision_id="d-1",
+            product_name="TestDrug",
+            decision_date="2025-01-01",
+            url="https://example.org/1",
+            therapy_area="Onkologie",
+            awg_text="HR-positives Mamma-Karzinom query token",
+            patient_group_text="query token",
+            zvt_text="Ribociclib in Kombination mit einem Aromatasehemmer (Anastrozol, Letrozol)",
+        ),
+    )
+    monkeypatch.setattr("app.shortlist.load_records", lambda: records)
+    sl.load_records_for_area.cache_clear()
+    sl.get_idf_for_area.cache_clear()
+    sl.get_bm25_stats_for_area.cache_clear()
+    sl.get_global_bm25_stats.cache_clear()
+    sl.get_global_idf.cache_clear()
+    payload = ShortlistRequest(
+        therapy_area=TherapyArea.ONKOLOGIE,
+        indication_text="HR-positives Mamma-Karzinom query token",
+        setting=Setting.AMBULANT,
+        role=TherapyRole.REPLACEMENT,
+    )
+    candidates, _, _, _ = shortlist(payload)
+    texts = [c.candidate_text.lower() for c in candidates]
+    # Both combo candidates should appear, not just "Anastrozol"
+    assert any("ribociclib" in t and "anastrozol" in t for t in texts), f"Missing Ribociclib+Anastrozol in {texts}"
+    assert any("ribociclib" in t and "letrozol" in t for t in texts), f"Missing Ribociclib+Letrozol in {texts}"
+    # "Anastrozol" alone should NOT be the only candidate (combo head must be preserved)
+    combo_texts = [t for t in texts if "ribociclib" in t]
+    assert len(combo_texts) >= 2
