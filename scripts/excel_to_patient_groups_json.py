@@ -1,3 +1,6 @@
+# From repo root:
+# python scripts/excel_to_patient_groups_json.py "/mnt/data/GBA Beschlüsse_2026.xlsx" "app/data/patient_groups_v2.json"
+
 from __future__ import annotations
 
 import json
